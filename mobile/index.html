@@ -12,6 +12,8 @@
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js"></script>
+<!-- App Configuration -->
+<script src="app-config.js"></script>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -546,6 +548,11 @@ body{font-family:'Outfit',sans-serif;color:var(--tx);display:flex;flex-direction
     </div>
     <div style="font-size:13.5px;font-weight:700;margin-bottom:10px">Plans disponibles</div>
     <div id="plan-rows-m"></div>
+    <div style="border-top:1px solid var(--bd);margin-top:16px;padding-top:16px">
+      <div style="font-size:12px;font-weight:700;color:var(--tx3);text-transform:uppercase;margin-bottom:10px">Navigation</div>
+      <button class="sheet-btn secondary" onclick="openLanding()" style="margin-bottom:8px">📍 Retour à l'accueil</button>
+      <button class="sheet-btn secondary" onclick="openAdmin()">⚙️ Tableau de bord admin</button>
+    </div>
     <button class="lg-btn-m" onclick="doLogout()">Se déconnecter</button>
   </div>
 </div>
@@ -567,6 +574,42 @@ function getApiEndpoint() {
 }
 
 const API_ENDPOINT = getApiEndpoint();
+
+// ── DYNAMIC URL GENERATOR ──────────────────────────────────────
+// Generate URLs for different app sections dynamically
+function getAppUrl(path = '') {
+  const baseUrl = window.location.origin;
+  const paths = {
+    'home': '/',
+    'landing': '/landing.html',
+    'mobile': '/mobile',
+    'admin': '/admin',
+    'api': '/api'
+  };
+  
+  // If path is a known key, use it; otherwise treat as custom path
+  const targetPath = paths[path] || (path.startsWith('/') ? path : '/' + path);
+  return baseUrl + targetPath;
+}
+
+// Navigate to app section
+function navigateToApp(section) {
+  const url = getAppUrl(section);
+  console.log(`[Navigation] Going to ${section}:`, url);
+  window.location.href = url;
+}
+
+// Open admin in new tab (if user is admin)
+function openAdmin() {
+  const adminUrl = getAppUrl('admin');
+  console.log('[Navigation] Opening admin dashboard:', adminUrl);
+  window.open(adminUrl, '_blank');
+}
+
+// Open landing page
+function openLanding() {
+  window.location.href = getAppUrl('landing');
+}
 
 // Load Firebase config from secure API endpoint
 async function loadFirebaseConfig(attempt = 0) {

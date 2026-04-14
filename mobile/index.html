@@ -553,21 +553,64 @@ body{font-family:'Outfit',sans-serif;color:var(--tx);display:flex;flex-direction
 <div class="toast" id="toast"></div>
 
 <script>
-// ── Firebase Configuration ──
-const firebaseConfig = {
-  apiKey: 'AIzaSyCVJxyeysHWDQ7yECTb-GApJz7u8s5l7N0',
-  authDomain: 'sales-companion-9cf56.firebaseapp.com',
-  projectId: 'sales-companion-9cf56',
-  storageBucket: 'sales-companion-9cf56.firebasestorage.app',
-  messagingSenderId: '1058275289756',
-  appId: '1:1058275289756:web:8c3a2f9b4e1d7c6f5a4b9e8d7c6f5a4b'
-};
-
+// ── Firebase Configuration - Loaded from API ──
+let firebaseConfig = null;
 let firebaseApp, auth, db;
 
+// Determine API endpoint based on environment
+function getApiEndpoint() {
+  if (window.location.hostname === 'localhost' || window.location.hostname.startsWith('192.168')) {
+    return 'http://192.168.1.139:3210';
+  }
+  // Production: same host
+  return window.location.protocol + '//' + window.location.host;
+}
+
+const API_ENDPOINT = getApiEndpoint();
+
+// Load Firebase config from secure API endpoint
+async function loadFirebaseConfig(attempt = 0) {
+  try {
+    const response = await fetch(`${API_ENDPOINT}/api/config/firebase`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+      timeout: 5000
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    
+    firebaseConfig = await response.json();
+    console.log('✓ Firebase config loaded from API');
+    return true;
+  } catch (error) {
+    console.error(`❌ Failed to load Firebase config (attempt ${attempt + 1}):`, error.message);
+    
+    if (attempt < 3) {
+      // Retry with exponential backoff
+      const delay = Math.pow(2, attempt) * 1000;
+      await new Promise(r => setTimeout(r, delay));
+      return loadFirebaseConfig(attempt + 1);
+    }
+    
+    return false;
+  }
+}
+
 // Initialize Firebase with proper error handling and retries
-function initializeFirebase(attempt = 0) {
+async function initializeFirebase(attempt = 0) {
   console.log(`[Firebase Init] Attempt ${attempt + 1}...`);
+  
+  // Load config from API if not already loaded
+  if (!firebaseConfig) {
+    const configLoaded = await loadFirebaseConfig();
+    if (!configLoaded) {
+      console.error('❌ Failed to load Firebase configuration from API');
+      showToast('❌ Erreur de configuration Firebase', 'error');
+      return;
+    }
+  }
   
   if (typeof firebase === 'undefined') {
     console.error('❌ Firebase SDK not loaded. Retrying...');
@@ -575,6 +618,7 @@ function initializeFirebase(attempt = 0) {
       setTimeout(() => initializeFirebase(attempt + 1), 200);
     } else {
       console.error('❌ Firebase SDK failed to load after 50 attempts (10 seconds). Check CDN.');
+      showToast('❌ Impossible de charger Firebase', 'error');
     }
     return;
   }
@@ -583,7 +627,10 @@ function initializeFirebase(attempt = 0) {
     console.log('[Firebase Init] SDK loaded, checking apps...');
     
     if (!firebase.apps.length) {
-      console.log('[Firebase Init] Initializing with config:', firebaseConfig.projectId);
+      if (!firebaseConfig.projectId || !firebaseConfig.apiKey) {
+        throw new Error('Firebase config incomplete - projectId or apiKey missing');
+      }
+      console.log('[Firebase Init] Initializing with projectId:', firebaseConfig.projectId);
       firebaseApp = firebase.initializeApp(firebaseConfig);
       console.log('✅ Firebase initialized');
     } else {

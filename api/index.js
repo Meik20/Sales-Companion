@@ -48,6 +48,35 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
+// Public Firebase Config (safe to expose - public credentials only)
+app.get('/api/config/firebase', (req, res) => {
+  try {
+    // Load from environment variables (set in Vercel or .env)
+    const firebaseConfig = {
+      apiKey: process.env.FIREBASE_PUBLIC_API_KEY || '',
+      authDomain: process.env.FIREBASE_AUTH_DOMAIN || `${process.env.FIREBASE_PROJECT_ID}.firebaseapp.com`,
+      projectId: process.env.FIREBASE_PROJECT_ID || '',
+      storageBucket: process.env.FIREBASE_STORAGE_BUCKET || `${process.env.FIREBASE_PROJECT_ID}.firebasestorage.app`,
+      messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || '',
+      appId: process.env.FIREBASE_APP_ID || ''
+    };
+    
+    // Validate that we have at least projectId and apiKey
+    if (!firebaseConfig.projectId || !firebaseConfig.apiKey) {
+      console.warn('⚠️ Firebase config incomplete - check environment variables');
+      return res.status(503).json({ 
+        error: 'Firebase configuration not available',
+        message: 'Please configure Firebase environment variables'
+      });
+    }
+    
+    res.json(firebaseConfig);
+  } catch (error) {
+    console.error('Firebase config error:', error);
+    res.status(500).json({ error: 'Failed to retrieve Firebase config' });
+  }
+});
+
 // Auth Routes
 app.post('/api/auth/register', async (req, res) => {
   try {

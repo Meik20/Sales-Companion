@@ -313,10 +313,6 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--tx);height
       <h1>SALES <em>COMPANION</em></h1>
       <p>Intelligence B2B · Cameroun</p>
     </div>
-    <div class="srv-row">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/></svg>
-      <input type="text" id="server-url" placeholder="http://localhost:3210">
-    </div>
     <div class="a-tabs">
       <div class="a-tab active" onclick="switchTab('login')">Connexion</div>
       <div class="a-tab" onclick="switchTab('register')">Créer un compte</div>
@@ -587,10 +583,9 @@ const REGION_CITIES={
 
 let token='',user=null,chatHistory=[],isSearching=false,isChatting=false;
 let customCities={},lastResults=[],lastFilters={},lastQuery='';
+const RAILWAY_SERVER='https://sales-companion-production.up.railway.app:3210';
 
 (async()=>{
-  const url=await window.electronAPI.getServerUrl();
-  if(url) document.getElementById('server-url').value=url;
   token=await window.electronAPI.getToken();
   if(token){const r=await window.electronAPI.getMe(token);if(r.status===200){user=r.data;showApp();}else await window.electronAPI.clearToken();}
   updateCities();
@@ -605,8 +600,6 @@ function switchTab(t){
 async function doLogin(){
   const btn=document.getElementById('l-btn');btn.disabled=true;btn.textContent='Connexion...';
   const err=document.getElementById('l-err');err.style.display='none';
-  const serverUrl=document.getElementById('server-url').value.trim()||'http://localhost:3210';
-  await window.electronAPI.saveServerUrl(serverUrl);
   try{
     const email = document.getElementById('l-email').value.trim();
     const password = document.getElementById('l-pass').value;
@@ -615,7 +608,7 @@ async function doLogin(){
     }
     
     console.log('[doLogin] Authenticating with server...');
-    const res = await window.electronAPI.login({email, password, serverUrl});
+    const res = await window.electronAPI.login({email, password, serverUrl: RAILWAY_SERVER});
     
     if (res.status !== 200) {
       throw new Error(res.data?.error || 'Erreur lors de la connexion');
@@ -640,8 +633,6 @@ async function doLogin(){
 async function doRegister(){
   const btn=document.getElementById('r-btn');btn.disabled=true;btn.textContent='Création...';
   const err=document.getElementById('r-err');err.style.display='none';
-  const serverUrl=document.getElementById('server-url').value.trim()||'http://localhost:3210';
-  await window.electronAPI.saveServerUrl(serverUrl);
   try{
     const name = document.getElementById('r-name').value.trim();
     const email = document.getElementById('r-email').value.trim();
@@ -651,7 +642,7 @@ async function doRegister(){
     }
     
     console.log('[doRegister] Registering:', email);
-    const res = await window.electronAPI.register({name, email, password, serverUrl});
+    const res = await window.electronAPI.register({name, email, password, serverUrl: RAILWAY_SERVER});
     
     if (res.status !== 200 && res.status !== 201) {
       throw new Error(res.data?.error || 'Erreur lors de l\'inscription');

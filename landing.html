@@ -385,7 +385,7 @@ footer p{font-size:13px;color:var(--tx3);margin-bottom:4px}
         <h3>Scannez pour installer</h3>
         <p>Pointez l'appareil photo de votre téléphone sur ce QR code pour accéder instantanément à l'application mobile.</p>
         <div class="url-box">
-          <span id="qr-url-text">http://192.168.1.139:3210/mobile</span>
+          <span id="qr-url-text">https://sales-companion-production.up.railway.app:3210/mobile</span>
           <button class="copy-btn" onclick="copyUrl()">Copier</button>
         </div>
       </div>
@@ -498,18 +498,8 @@ footer p{font-size:13px;color:var(--tx3);margin-bottom:4px}
 </div>
 
 <script>
-// ── CONFIG — URL dynamique selon l'environnement ──────────────
-// En production (Vercel), utilise le domaine courant
-// En local, utilise l'IP locale
-let APP_URL;
-if (window.location.hostname === 'localhost' || window.location.hostname.startsWith('192.168')) {
-  APP_URL = 'http://192.168.1.139:3210/mobile';
-} else {
-  // Production sur Vercel ou domaine personnalisé
-  const host = window.location.host;
-  const protocol = window.location.protocol;
-  APP_URL = protocol + '//' + host + '/mobile';
-}
+// ── CONFIG — URL Production Railway (fixe) ─────────────────────────────────────────
+let APP_URL = 'https://sales-companion-production.up.railway.app:3210/mobile';
 
 // ── DEVICE DETECTION ─────────────────────────────────────────────
 const ua = navigator.userAgent.toLowerCase();

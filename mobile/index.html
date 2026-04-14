@@ -564,16 +564,9 @@ body{font-family:'Outfit',sans-serif;color:var(--tx);display:flex;flex-direction
 let firebaseConfig = null;
 let firebaseApp, auth, db;
 
-// Determine API endpoint based on environment
-function getApiEndpoint() {
-  if (window.location.hostname === 'localhost' || window.location.hostname.startsWith('192.168')) {
-    return 'http://192.168.1.139:3210';
-  }
-  // Production: same host
-  return window.location.protocol + '//' + window.location.host;
-}
-
-const API_ENDPOINT = getApiEndpoint();
+// ── API Configuration - Railway Production Server (FIXED) ──────────────────────────────────────────
+const RAILWAY_API = 'https://sales-companion-production.up.railway.app:3210';
+const API_ENDPOINT = RAILWAY_API;
 
 // ── DYNAMIC URL GENERATOR ──────────────────────────────────────
 // Generate URLs for different app sections dynamically

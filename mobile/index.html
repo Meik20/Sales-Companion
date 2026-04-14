@@ -747,6 +747,13 @@ let user = null, chatHistory = [], pipelineData = [], lastResults = [], lastFilt
 let isSearching = false, isChatting = false, currentPipTab = 'prospection';
 let addPipDefault = {};
 
+// ── UTILITIES ─────────────────────────────────────────────────────
+function showToast(message, type = 'info') {
+  console.log(`[${type.toUpperCase()}] ${message}`);
+  // Toast messages logged to console for PWA
+  // Can be enhanced with UI toast notifications if needed
+}
+
 // ── INIT ──────────────────────────────────────────────────────────
 // Wait for Firebase to initialize before listening to auth state
 function waitForFirebase(callback, attempts = 0) {

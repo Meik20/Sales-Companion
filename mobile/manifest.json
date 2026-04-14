@@ -1,10 +1,11 @@
 {
   "name": "Sales Companion",
-  "short_name": "Sales Companion",
+  "short_name": "Sales",
   "description": "Intelligence B2B Cameroun — Prospection & Pipeline commercial",
-  "start_url": "/",
+  "start_url": "/mobile",
+  "scope": "/mobile/",
   "display": "standalone",
-  "background_color": "#1B7A3E",
+  "background_color": "#ffffff",
   "theme_color": "#1B7A3E",
   "orientation": "portrait-primary",
   "categories": ["business", "productivity"],
@@ -23,13 +24,13 @@
     {
       "name": "Rechercher",
       "short_name": "Recherche",
-      "url": "/?tab=search",
+      "url": "/mobile?tab=search",
       "icons": [{ "src": "icons/icon-96.png", "sizes": "96x96" }]
     },
     {
       "name": "Mon Pipeline",
       "short_name": "Pipeline",
-      "url": "/?tab=pipeline",
+      "url": "/mobile?tab=pipeline",
       "icons": [{ "src": "icons/icon-96.png", "sizes": "96x96" }]
     }
   ]

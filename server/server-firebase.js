@@ -419,6 +419,23 @@ app.get('/health', (req, res) => {
   });
 });
 
+// ── PUBLIC Firebase Config (for client initialization) ──────────
+app.get('/api/config/firebase', (req, res) => {
+  try {
+    res.json({
+      apiKey: 'AIzaSyCVJxyeysHWDQ7yECTb-GApJz7u8s5l7N0',
+      authDomain: 'sales-companion-9cf56.firebaseapp.com',
+      projectId: 'sales-companion-9cf56',
+      storageBucket: 'sales-companion-9cf56.firebasestorage.app',
+      messagingSenderId: '385537597968',
+      appId: '1:385537597968:web:8c7e0f4e1d6c3b9a2e5f7c1d',
+    });
+  } catch (error) {
+    console.error('Firebase config error:', error);
+    res.status(500).json({ error: 'Failed to retrieve Firebase config' });
+  }
+});
+
 app.get('/mobile', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'mobile', 'index.html'));
 });

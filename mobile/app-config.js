@@ -9,7 +9,7 @@ const APP_ENV = {
   isProduction: true,
   hostname: 'sales-companion-production.up.railway.app',
   protocol: 'https:',
-  origin: 'https://sales-companion-production.up.railway.app:3210'
+  origin: 'https://sales-companion-production.up.railway.app'
 };
 
 // ── APP URLS ──────────────────────────────────────────────────
@@ -28,11 +28,11 @@ const APP_URLS = {
   docs: `${APP_ENV.origin}/docs`,
   
   // API endpoints
-  firebase: `${APP_ENV.isLocal ? 'http://192.168.1.139:3210' : APP_ENV.origin}/api/config/firebase`,
-  health: `${APP_ENV.isLocal ? 'http://192.168.1.139:3210' : APP_ENV.origin}/api/health`,
-  search: `${APP_ENV.isLocal ? 'http://192.168.1.139:3210' : APP_ENV.origin}/api/companies/search`,
-  config: `${APP_ENV.isLocal ? 'http://192.168.1.139:3210' : APP_ENV.origin}/api/config`,
-  usage: `${APP_ENV.isLocal ? 'http://192.168.1.139:3210' : APP_ENV.origin}/api/usage/log`,
+  firebase: `${APP_ENV.origin}/api/config/firebase`,
+  health: `${APP_ENV.origin}/api/health`,
+  search: `${APP_ENV.origin}/api/companies/search`,
+  config: `${APP_ENV.origin}/api/config`,
+  usage: `${APP_ENV.origin}/api/usage/log`,
   
   // Functions
   getPageUrl: (pageName) => {

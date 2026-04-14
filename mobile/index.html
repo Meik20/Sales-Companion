@@ -305,7 +305,8 @@ body{font-family:'Outfit',sans-serif;color:var(--tx);display:flex;flex-direction
       <h1>SALES <em>COMPANION</em></h1>
       <p>Intelligence B2B · Cameroun</p>
     </div>
-    <div class="srv-row">
+    <!-- Server URL is hardcoded to Railway production (hidden) -->
+    <div class="srv-row" style="display:none">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/></svg>
       <input type="url" id="server-url" placeholder="http://adresse-du-serveur:3210" inputmode="url">
     </div>
@@ -711,7 +712,9 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-const API = localStorage.getItem('sc_server') || '';
+// ── Production Server URL (hardcoded for deployment) ─────────────────
+const RAILWAY_SERVER = 'https://sales-companion-production.up.railway.app';
+const API = RAILWAY_SERVER;
 const REGION_CITIES = {
   '':['Douala','Yaoundé','Bafoussam','Garoua','Bamenda','Maroua','Ngaoundéré','Bertoua','Ebolowa','Kribi','Limbé','Buea','Kumba','Edéa','Nkongsamba'],
   'Littoral':['Douala','Edéa','Nkongsamba','Mbanga','Loum','Manjo','Yabassi'],
@@ -742,8 +745,7 @@ function waitForFirebase(callback, attempts = 0) {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-  const url = localStorage.getItem('sc_server');
-  if (url) document.getElementById('server-url').value = url;
+  // Server URL is hardcoded to Railway production
   
   // Wait for Firebase initialization, then listen to auth state
   waitForFirebase(() => {
@@ -778,7 +780,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 // ── API helper ────────────────────────────────────────────────────
-function getServer() { return localStorage.getItem('sc_server') || ''; }
+function getServer() { return RAILWAY_SERVER; }
 function api(method, path, body, tok) {
   const opts = { method, headers: { 'Content-Type': 'application/json' } };
   if (tok) opts.headers['Authorization'] = 'Bearer ' + tok;

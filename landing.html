@@ -235,9 +235,10 @@ footer p{font-size:13px;color:var(--tx3);margin-bottom:4px}
   <div class="device-hint" id="device-hint"></div>
 
   <div class="hero-actions">
-    <a href="https://drive.google.com/file/d/1xYrpI5TBBRplWDnlRF_gfPLv1LSunjxp/view?usp=sharing" target="_blank" rel="noopener" class="btn-primary">
+    <!-- Bouton principal : mobile sur téléphone, desktop sur PC (géré par JS) -->
+    <a href="https://sales-companion-production.up.railway.app/mobile" id="hero-main-btn" target="_blank" rel="noopener" class="btn-primary">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-      Télécharger
+      <span id="hero-main-label">Télécharger</span>
     </a>
     <a href="#fonctionnalites" class="btn-secondary">Voir les fonctionnalités →</a>
   </div>
@@ -310,11 +311,11 @@ footer p{font-size:13px;color:var(--tx3);margin-bottom:4px}
   <div class="download-grid">
 
     <!-- Android -->
-    <a class="dl-card featured" href="https://sales-companion-production.up.railway.app/mobile" id="android-card">
+    <a class="dl-card featured" href="https://sales-companion-production.up.railway.app/mobile" id="android-card" target="_blank" rel="noopener">
       <div class="dl-icon android">🤖</div>
       <div class="dl-platform">Android</div>
       <p class="dl-desc">Installez l'application directement depuis votre navigateur Chrome. Aucune boutique requise.</p>
-      <div class="dl-btn" id="android-btn">
+      <div class="dl-btn">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
         Ouvrir l'application
       </div>
@@ -326,11 +327,11 @@ footer p{font-size:13px;color:var(--tx3);margin-bottom:4px}
     </a>
 
     <!-- iPhone -->
-    <a class="dl-card" href="https://sales-companion-production.up.railway.app/mobile" id="ios-card">
+    <a class="dl-card" href="https://sales-companion-production.up.railway.app/mobile" id="ios-card" target="_blank" rel="noopener">
       <div class="dl-icon ios">🍎</div>
       <div class="dl-platform">iPhone / iPad</div>
       <p class="dl-desc">Accédez via Safari et installez sur votre écran d'accueil en quelques secondes.</p>
-      <div class="dl-btn outline" id="ios-btn">
+      <div class="dl-btn outline">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
         Ouvrir dans Safari
       </div>
@@ -346,9 +347,9 @@ footer p{font-size:13px;color:var(--tx3);margin-bottom:4px}
       <div class="dl-icon desktop">🖥️</div>
       <div class="dl-platform">Windows / Mac</div>
       <p class="dl-desc">Application desktop complète avec 3 panneaux : recherche, pipeline et assistant IA côte à côte.</p>
-      <a class="dl-btn outline" href="https://drive.google.com/file/d/1xYrpI5TBBRplWDnlRF_gfPLv1LSunjxp/view?usp=sharing" id="desktop-btn">
+      <a class="dl-btn outline" href="https://drive.google.com/file/d/1xYrpI5TBBRplWDnlRF_gfPLv1LSunjxp/view?usp=drive_link" id="desktop-btn" target="_blank" rel="noopener">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        Télécharger .exe
+        Télécharger .exe / .dmg
       </a>
       <div class="dl-steps">
         <div class="dl-step"><span class="step-num">1</span><span>Téléchargez et décompressez le package</span></div>
@@ -358,7 +359,7 @@ footer p{font-size:13px;color:var(--tx3);margin-bottom:4px}
     </div>
 
     <!-- Web direct -->
-    <a class="dl-card" href="https://sales-companion-production.up.railway.app/mobile">
+    <a class="dl-card" href="https://sales-companion-production.up.railway.app/mobile" target="_blank" rel="noopener">
       <div class="dl-icon web">🌐</div>
       <div class="dl-platform">Accès web direct</div>
       <p class="dl-desc">Aucune installation. Utilisez Sales Companion directement depuis n'importe quel navigateur.</p>
@@ -378,8 +379,7 @@ footer p{font-size:13px;color:var(--tx3);margin-bottom:4px}
   <div class="qr-section" id="qr-section">
     <div class="qr-wrap">
       <div class="qr-code" id="qr-container">
-        <a href="./mobile" id="qr-link" target="_blank" rel="noopener noreferrer" aria-label="Ouvrir l'application mobile" style="display:block;width:100%;height:100%;">
-          <!-- QR code généré dynamiquement -->
+        <a href="https://sales-companion-production.up.railway.app/mobile" id="qr-link" target="_blank" rel="noopener noreferrer" aria-label="Ouvrir l'application mobile" style="display:block;width:100%;height:100%;">
           <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" id="qr-svg"></svg>
         </a>
       </div>
@@ -500,57 +500,89 @@ footer p{font-size:13px;color:var(--tx3);margin-bottom:4px}
 </div>
 
 <script>
-// ── CONFIG — URL Production Railway (fixe) ─────────────────────────────────────────
-let APP_URL = 'https://sales-companion-production.up.railway.app/mobile';
+// ── URLs ──────────────────────────────────────────────────────
+const APP_URL     = 'https://sales-companion-production.up.railway.app/mobile';
+const DESKTOP_URL = 'https://drive.google.com/file/d/1xYrpI5TBBRplWDnlRF_gfPLv1LSunjxp/view?usp=drive_link';
 
-// ── DEVICE DETECTION ─────────────────────────────────────────────
-const ua = navigator.userAgent.toLowerCase();
+// ── DEVICE DETECTION ─────────────────────────────────────────
+const ua        = navigator.userAgent.toLowerCase();
 const isAndroid = /android/.test(ua);
-const isIOS = /iphone|ipad|ipod/.test(ua);
-const isMobile = isAndroid || isIOS;
+const isIOS     = /iphone|ipad|ipod/.test(ua);
+const isMobile  = isAndroid || isIOS;
 const isWindows = /windows/.test(ua);
-const isMac = /macintosh|mac os/.test(ua);
+const isMac     = /macintosh|mac os/.test(ua);
+const isDesktop = isWindows || isMac;
 
-const banner = document.getElementById('device-banner');
+const banner  = document.getElementById('device-banner');
 const devIcon = document.getElementById('dev-icon');
 const devText = document.getElementById('dev-text');
-const devCta = document.getElementById('dev-cta');
-const hint = document.getElementById('device-hint');
-const navCta = document.getElementById('nav-cta-btn');
+const devCta  = document.getElementById('dev-cta');
+const hint    = document.getElementById('device-hint');
+const navCta  = document.getElementById('nav-cta-btn');
+const heroBtn = document.getElementById('hero-main-btn');
+const heroLbl = document.getElementById('hero-main-label');
 
-// Nav CTA always goes to mobile app
-navCta.href = APP_URL;
+// Nav CTA : mobile → app web, desktop → téléchargement
+navCta.href = isDesktop ? DESKTOP_URL : APP_URL;
 
 if (isAndroid) {
   devIcon.textContent = '🤖';
-  devText.innerHTML = '<strong>Android détecté</strong><br>Installez l\'app en un tap';
-  devCta.href = APP_URL; devCta.textContent = 'Installer →';
+  devText.innerHTML   = '<strong>Android détecté</strong><br>Installez l\'app en un tap';
+  devCta.href         = APP_URL;
+  devCta.textContent  = 'Installer →';
+  heroBtn.href        = APP_URL;
+  heroLbl.textContent = 'Ouvrir l\'application';
   document.getElementById('android-card').style.order = '-1';
   hint.innerHTML = 'Après l\'ouverture, appuyez sur <strong style="color:var(--g)">⋮ → Ajouter à l\'écran d\'accueil</strong>';
+
 } else if (isIOS) {
   devIcon.textContent = '🍎';
-  devText.innerHTML = '<strong>iPhone/iPad détecté</strong><br>Ouvrez dans Safari pour installer';
-  devCta.href = APP_URL; devCta.textContent = 'Ouvrir →';
+  devText.innerHTML   = '<strong>iPhone/iPad détecté</strong><br>Ouvrez dans Safari pour installer';
+  devCta.href         = APP_URL;
+  devCta.textContent  = 'Ouvrir →';
+  heroBtn.href        = APP_URL;
+  heroLbl.textContent = 'Ouvrir dans Safari';
   document.getElementById('ios-card').style.order = '-1';
   hint.innerHTML = 'Dans Safari, appuyez sur <strong style="color:var(--g)">↑ Partager → Sur l\'écran d\'accueil</strong>';
+
 } else if (isWindows) {
   devIcon.textContent = '🖥️';
-  devText.innerHTML = '<strong>Windows détecté</strong><br>Téléchargez l\'application desktop';
-  devCta.href = APP_URL; devCta.textContent = 'Accéder →';
+  devText.innerHTML   = '<strong>Windows détecté</strong><br>Téléchargez l\'application desktop';
+  devCta.href         = DESKTOP_URL;   // ← pointe vers Google Drive
+  devCta.textContent  = 'Télécharger →';
+  heroBtn.href        = DESKTOP_URL;   // ← bouton hero pointe vers desktop
+  heroLbl.textContent = 'Télécharger pour Windows';
   document.getElementById('desktop-card').style.order = '-1';
+  hint.innerHTML = 'Décompressez le package puis lancez <strong style="color:var(--g)">DEMARRER-SERVEUR.bat</strong>';
+
 } else if (isMac) {
   devIcon.textContent = '💻';
-  devText.innerHTML = '<strong>Mac détecté</strong><br>Accédez à l\'application web';
-  devCta.href = APP_URL; devCta.textContent = 'Ouvrir →';
+  devText.innerHTML   = '<strong>Mac détecté</strong><br>Téléchargez l\'application desktop';
+  devCta.href         = DESKTOP_URL;   // ← pointe vers Google Drive
+  devCta.textContent  = 'Télécharger →';
+  heroBtn.href        = DESKTOP_URL;   // ← bouton hero pointe vers desktop
+  heroLbl.textContent = 'Télécharger pour Mac';
+  document.getElementById('desktop-card').style.order = '-1';
+
 } else {
   banner.classList.add('hidden');
+  heroBtn.href        = APP_URL;
+  heroLbl.textContent = 'Télécharger';
 }
 
-// Set all mobile links
-document.querySelectorAll('[href*="192.168.1"]').forEach(el => el.href = APP_URL);
-
-// ── QR CODE GENERATOR (pur JS, sans lib externe) ─────────────────
+// ── QR CODE ───────────────────────────────────────────────────
 document.getElementById('qr-url-text').textContent = APP_URL;
+const qrLink = document.getElementById('qr-link');
+const qrImg  = document.createElement('img');
+qrImg.src    = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&format=svg&color=1B7A3E&bgcolor=ffffff&data=' + encodeURIComponent(APP_URL);
+qrImg.alt    = 'QR Code Sales Companion';
+qrImg.style.cssText = 'width:100%;height:100%;border-radius:4px';
+qrLink.href  = APP_URL;
+qrImg.onerror = () => {
+  qrLink.innerHTML = '<div style="width:136px;height:136px;display:flex;align-items:center;justify-content:center;text-align:center;padding:10px;font-size:10px;color:#333;word-break:break-all;line-height:1.4">' + APP_URL + '</div>';
+};
+qrLink.innerHTML = '';
+qrLink.appendChild(qrImg);
 
 function copyUrl() {
   navigator.clipboard.writeText(APP_URL).then(() => {
@@ -561,90 +593,27 @@ function copyUrl() {
   });
 }
 
-// Simple QR code using Google Charts API
-const qrSvg = document.getElementById('qr-svg');
-const qrLink = document.getElementById('qr-link');
-const qrImg = document.createElement('img');
-qrImg.src = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&format=svg&color=1B7A3E&bgcolor=ffffff&data=' + encodeURIComponent(APP_URL);
-qrImg.alt = 'QR Code Sales Companion';
-qrImg.style.cssText = 'width:100%;height:100%;border-radius:4px';
-qrLink.href = APP_URL;
-qrLink.style.cursor = 'pointer';
-qrImg.onerror = () => {
-  // Fallback si pas de réseau : affiche l'URL en texte
-  qrLink.innerHTML = '<div style="width:160px;height:160px;display:flex;align-items:center;justify-content:center;text-align:center;padding:10px;font-size:10px;color:#333;word-break:break-all;line-height:1.4">' + APP_URL + '</div>';
-};
-qrLink.innerHTML = '';
-qrLink.appendChild(qrImg);
-
-// ── SMOOTH NAV ────────────────────────────────────────────────────
+// ── SMOOTH NAV ────────────────────────────────────────────────
 document.querySelectorAll('a[href^="#"]').forEach(a => {
   a.addEventListener('click', e => {
     const target = document.querySelector(a.getAttribute('href'));
-    if (target) { e.preventDefault(); target.scrollIntoView({ behavior: 'smooth' }); }
+    if (target) { e.preventDefault(); target.scrollIntoView({ behavior:'smooth' }); }
   });
 });
 
-// ── NAV SHADOW ON SCROLL ──────────────────────────────────────────
+// ── NAV SHADOW ────────────────────────────────────────────────
 window.addEventListener('scroll', () => {
   document.querySelector('nav').style.boxShadow = window.scrollY > 10 ? '0 4px 24px rgba(0,0,0,.3)' : '';
 });
-// ── API HEALTH CHECK ──────────────────────────────────────────
-async function checkApiHealth() {
-  try {
-    const response = await fetch(APP_URL.replace('/mobile', '/api/health'), {
-      method: 'GET',
-      timeout: 5000
-    });
-    if (response.ok) {
-      const data = await response.json();
-      console.log('✓ API Santé:', data.status);
-      return true;
-    }
-  } catch (error) {
-    console.warn('API indisponible, interface web en mode dégradé');
-  }
-  return false;
+
+// ── ANALYTICS ────────────────────────────────────────────────
+function trackEvent(action, label='') {
+  if (typeof gtag !== 'undefined') gtag('event', action, { event_category:'engagement', event_label:label });
+  console.log('[Analytics]', action, label);
 }
-
-// Vérifier la santé de l'API au chargement
-document.addEventListener('DOMContentLoaded', () => {
-  checkApiHealth();
-  
-  // Afficher la démo
-  console.log('Sales Companion Landing prêt');
-  console.log('App URL:', APP_URL);
-});
-
-// ── ANALYTICS ÉVÉNEMENTS ────────────────────────────────────────
-function trackEvent(action, category = 'engagement') {
-  if (typeof gtag !== 'undefined') {
-    gtag('event', action, { 'event_category': category });
-  }
-  console.log('[Analytics]', action);
-}
-
-// Tracker les clics
 document.querySelectorAll('.btn-primary, .btn-secondary, .dl-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    trackEvent('click_button', btn.textContent.trim());
-  });
+  btn.addEventListener('click', () => trackEvent('click_button', btn.textContent.trim()));
 });
-
-// ── GESTION DU PARTAGE ────────────────────────────────────────
-document.querySelectorAll('[data-share]').forEach(btn => {
-  btn.addEventListener('click', async () => {
-    const text = 'Sales Companion — Base de données B2B Cameroun. Télécharger depuis';
-    const url = window.location.href;
-    
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: 'Sales Companion', text, url });
-      } catch (err) {
-        console.log('Partage annulé');
-      }
-    }
-  });
-});</script>
+</script>
 </body>
 </html>

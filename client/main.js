@@ -1,14 +1,68 @@
 const { app, BrowserWindow, Menu, shell, ipcMain } = require('electron');
+const { autoUpdater } = require('electron-updater');
+const log = require('electron-log');
 const path = require('path');
 const https = require('https');
 const http = require('http');
 const fs = require('fs');
 
 let mainWindow;
+const UPDATE_CHANNEL = 'update-status';
 
 const TOKEN_FILE = path.join(app.getPath('userData'), 'auth_token.txt');
 const SERVER_FILE = path.join(app.getPath('userData'), 'server_url.txt');
 const DEFAULT_SERVER = 'https://sales-companion-production.up.railway.app';
+
+function sendUpdateStatus(channel, payload) {
+  if (mainWindow && mainWindow.webContents) {
+    mainWindow.webContents.send(channel, payload);
+  }
+}
+
+function setupAutoUpdater() {
+  autoUpdater.logger = log;
+  autoUpdater.logger.transports.file.level = 'info';
+  autoUpdater.autoDownload = true;
+
+  autoUpdater.on('checking-for-update', () => {
+    console.log('🔄 Checking for updates...');
+    sendUpdateStatus(UPDATE_CHANNEL, { status: 'checking' });
+  });
+
+  autoUpdater.on('update-available', (info) => {
+    console.log('⬇️ Update disponible:', info.version);
+    sendUpdateStatus(UPDATE_CHANNEL, { status: 'available', version: info.version });
+  });
+
+  autoUpdater.on('update-not-available', () => {
+    console.log('✅ Pas de mise à jour disponible.');
+    sendUpdateStatus(UPDATE_CHANNEL, { status: 'not-available' });
+  });
+
+  autoUpdater.on('download-progress', (progress) => {
+    const progressPayload = {
+      percent: Math.round(progress.percent),
+      transferred: progress.transferred,
+      total: progress.total,
+      bytesPerSecond: progress.bytesPerSecond,
+    };
+    console.log(`📥 Téléchargement ${progressPayload.percent}%`);
+    sendUpdateStatus(UPDATE_CHANNEL, { status: 'downloading', progress: progressPayload });
+  });
+
+  autoUpdater.on('update-downloaded', () => {
+    console.log('✅ Mise à jour téléchargée, installation en cours...');
+    sendUpdateStatus(UPDATE_CHANNEL, { status: 'downloaded' });
+    setTimeout(() => {
+      autoUpdater.quitAndInstall();
+    }, 2000);
+  });
+
+  autoUpdater.on('error', (err) => {
+    console.error('❌ Auto-update error:', err == null ? 'unknown' : err.message);
+    sendUpdateStatus(UPDATE_CHANNEL, { status: 'error', message: err?.message || String(err) });
+  });
+}
 
 /* ─────────────────────────────────────────────
    WINDOW
@@ -411,6 +465,8 @@ const menuTemplate = [
 app.whenReady().then(() => {
   Menu.setApplicationMenu(Menu.buildFromTemplate(menuTemplate));
   createWindow();
+  setupAutoUpdater();
+  autoUpdater.checkForUpdatesAndNotify();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

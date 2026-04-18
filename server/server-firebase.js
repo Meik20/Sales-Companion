@@ -106,11 +106,8 @@ app.use(
 app.use(express.json({ limit: '10mb' }));
 
 // ── ADMIN PANEL SPA (Single Page Application) ─────────────────
-// Serve static files, fallback to index.html for SPA routing
+// Serve static files for admin panel assets
 app.use(express.static(path.join(__dirname, 'admin')));
-app.get('/admin*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'admin', 'index.html'));
-});
 
 // ── MOBILE APP (PWA) ──────────────────────────────────────────
 app.use('/mobile', express.static(path.join(__dirname, '..', 'mobile')));
@@ -681,58 +678,6 @@ app.post('/auth/login', authLimiter, async (req, res) => {
 // ── ADMIN ROUTES ────────────────────────────────────────────────
 
 /**
- * GET /admin/stats
- * Statistiques du panel admin
- */
-app.get('/admin/stats', verifyAdmin, async (req, res) => {
-  try {
-    // Récupérer les statistiques depuis Firestore
-    const db = require('firebase-admin').firestore();
-    const [usersSnap, companiesSnap, logsSnap] = await Promise.all([
-      db.collection('users').count().get(),
-      db.collection('companies').count().get(),
-      db.collection('usage_logs').orderBy('timestamp', 'desc').limit(100).get(),
-    ]);
-
-    const totalUsers = usersSnap.data().count || 0;
-    const totalCompanies = companiesSnap.data().count || 0;
-    const today = new Date().toISOString().split('T')[0];
-
-    let activeToday = 0;
-    let totalSearches = 0;
-    const companiesByRegion = {};
-    const companiesBySecteur = {};
-    const planCounts = { free: 0, starter: 0, pro: 0, enterprise: 0 };
-    const recentLogs = [];
-
-    logsSnap.forEach(doc => {
-      const log = doc.data();
-      if (log.timestamp && log.timestamp.toDate().toISOString().split('T')[0] === today) activeToday++;
-      totalSearches++;
-      recentLogs.push({
-        name: log.user_name || 'Utilisateur',
-        query: log.query || '—',
-        results_count: log.results_count || 0,
-        plan: log.plan || 'free',
-      });
-    });
-
-    res.json({
-      totalUsers,
-      totalCompanies,
-      activeToday,
-      totalSearches,
-      companiesByRegion: Object.entries(companiesByRegion).map(([region, c]) => ({ region, c })).sort((a, b) => b.c - a.c),
-      companiesBySecteur: Object.entries(companiesBySecteur).map(([secteur, c]) => ({ secteur, c })).sort((a, b) => b.c - a.c),
-      planCounts: Object.entries(planCounts).map(([plan, c]) => ({ plan, c })),
-      recentLogs: recentLogs.slice(0, 8),
-    });
-  } catch (error) {
-    return safeError(res, 500, 'Erreur de statistiques', error);
-  }
-});
-
-/**
  * POST /admin/import
  * Importer des entreprises via Excel/CSV
  */
@@ -900,57 +845,54 @@ app.post('/init-admin', async (req, res) => {
 
 // ── ADMIN STATS ────────────────────────────────────────────────
 app.get('/admin/stats', verifyAdmin, async (req, res) => {
-  try {
-    const { getFirestore } = require('firebase-admin/firestore');
-    const adminDb = getFirestore();
+  const { getFirestore } = require('firebase-admin/firestore');
+  const adminDb = getFirestore();
 
-    const [usersSnap, companiesSnap] = await Promise.all([
-      adminDb.collection('users').count().get(),
-      adminDb.collection('companies').where('active', '==', true).count().get(),
+  // Helper — renvoie 0 si la collection n'existe pas
+  const safeCount = async (query) => {
+    try { return (await query.count().get()).data().count; }
+    catch(_) { return 0; }
+  };
+
+  // Helper — renvoie [] si la collection n'existe pas
+  const safeDocs = async (query) => {
+    try { return (await query.get()).docs.map(d => d.data()); }
+    catch(_) { return []; }
+  };
+
+  try {
+    const today = new Date(); today.setHours(0,0,0,0);
+
+    const [totalUsers, totalCompanies, activeToday, totalSearches] = await Promise.all([
+      safeCount(adminDb.collection('users')),
+      safeCount(adminDb.collection('companies')),
+      safeCount(adminDb.collection('usage_logs').where('createdAt', '>=', today)),
+      safeCount(adminDb.collection('usage_logs')),
     ]);
 
-    // Recherches du jour
-    const today = new Date();
-    today.setHours(0,0,0,0);
-    const logsSnap = await adminDb
-      .collection('usage_logs')
-      .where('createdAt', '>=', today)
-      .count().get();
+    const users      = await safeDocs(adminDb.collection('users'));
+    const companies  = await safeDocs(adminDb.collection('companies'));
+    const recentLogs = await safeDocs(
+      adminDb.collection('usage_logs').orderBy('createdAt','desc').limit(20)
+    );
 
-    // Total recherches
-    const totalSnap = await adminDb.collection('usage_logs').count().get();
+    // Répartition plans
+    const planMap = {};
+    users.forEach(u => { const p = u.plan || 'free'; planMap[p] = (planMap[p] || 0) + 1; });
 
-    // Répartition par plan
-    const usersAll = await adminDb.collection('users').get();
-    const planMap  = {};
+    // Répartition régions et secteurs
     const regionMap = {}, secteurMap = {};
-    usersAll.forEach(doc => {
-      const plan = doc.data().plan || 'free';
-      planMap[plan] = (planMap[plan] || 0) + 1;
+    companies.forEach(c => {
+      if (c.region)  regionMap[c.region]   = (regionMap[c.region]   || 0) + 1;
+      if (c.sector)  secteurMap[c.sector]  = (secteurMap[c.sector]  || 0) + 1;
     });
-
-    // Répartition entreprises par région / secteur
-    const cosSnap = await adminDb.collection('companies').where('active', '==', true).get();
-    cosSnap.forEach(doc => {
-      const d = doc.data();
-      if (d.region)  regionMap[d.region]   = (regionMap[d.region]   || 0) + 1;
-      if (d.sector)  secteurMap[d.sector]  = (secteurMap[d.sector]  || 0) + 1;
-    });
-
-    // Logs récents
-    const recentSnap = await adminDb
-      .collection('usage_logs')
-      .orderBy('createdAt', 'desc')
-      .limit(20)
-      .get();
-    const recentLogs = recentSnap.docs.map(doc => doc.data());
 
     res.json({
-      totalUsers:         usersSnap.data().count,
-      totalCompanies:     companiesSnap.data().count,
-      activeToday:        logsSnap.data().count,
-      totalSearches:      totalSnap.data().count,
-      planCounts:         Object.entries(planMap).map(([plan,c]) => ({plan,c})),
+      totalUsers,
+      totalCompanies,
+      activeToday,
+      totalSearches,
+      planCounts:         Object.entries(planMap).map(([plan,c])=>({plan,c})),
       companiesByRegion:  Object.entries(regionMap).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([region,c])=>({region,c})),
       companiesBySecteur: Object.entries(secteurMap).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([secteur,c])=>({secteur,c})),
       recentLogs,
@@ -968,6 +910,12 @@ app.get('/admin/config', verifyAdmin, async (req, res) => {
   } catch (error) {
     return safeError(res, 500, 'Erreur config', error);
   }
+});
+
+// ── ADMIN PANEL SPA (Single Page Application) ─────────────────
+// Fallback to index.html for admin SPA routes after all admin APIs
+app.get('/admin*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'admin', 'index.html'));
 });
 
 // ── START SERVER ────────────────────────────────────────────────

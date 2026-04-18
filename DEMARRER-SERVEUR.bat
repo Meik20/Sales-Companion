@@ -63,5 +63,5 @@ echo.
 
 :: Passer l'IP au serveur via variable d'environnement
 set SERVER_IP=%IP%
-node server.js
+node server/server-firebase.js
 pause

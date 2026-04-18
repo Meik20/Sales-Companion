@@ -22,6 +22,13 @@ const {
   updateUserPlan,
   searchCompanies,
   importCompaniesBatch,
+  addSavedSearch,
+  getSavedSearches,
+  deleteSavedSearch,
+  getUserPipeline,
+  addPipelineProspect,
+  updatePipelineProspect,
+  deletePipelineProspect,
   getConfig,
   setConfig,
   logUsage,
@@ -133,11 +140,15 @@ app.post('/api/admin/import-companies', verifyToken, verifyAdmin, async (req, re
 // Search Route
 app.get('/api/companies/search', verifyToken, async (req, res) => {
   try {
-    const { query } = req.query;
-    if (!query) {
-      return res.status(400).json({ error: 'Missing query parameter' });
-    }
-    const companies = await searchCompanies(query);
+    const { query, sector, region, city, limit } = req.query;
+    const companies = await searchCompanies({
+      query,
+      sector,
+      region,
+      city,
+      limit: limit || 50,
+      active: true,
+    });
     res.json({ companies });
   } catch (error) {
     console.error('Search error:', error);
@@ -145,11 +156,128 @@ app.get('/api/companies/search', verifyToken, async (req, res) => {
   }
 });
 
+app.post('/api/search', verifyToken, async (req, res) => {
+  try {
+    const { query, filters = {} } = req.body;
+    const companies = await searchCompanies({
+      query,
+      sector: filters.secteur || filters.sector,
+      region: filters.region,
+      city: filters.ville || filters.city,
+      limit: filters.limit || 50,
+      active: true,
+    });
+    res.json({ count: companies.length, source: 'database', results: companies });
+  } catch (error) {
+    console.error('Search error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/chat', verifyToken, async (req, res) => {
+  try {
+    const { messages } = req.body;
+    if (!Array.isArray(messages) || messages.length === 0) {
+      return res.status(400).json({ error: 'Messages are required' });
+    }
+    res.json({
+      choices: [
+        {
+          message: {
+            content:
+              'Assistant IA non configuré. Veuillez définir la clé groq_api_key dans la configuration du serveur.',
+          },
+        },
+      ],
+    });
+  } catch (error) {
+    console.error('Chat error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/saved-searches', verifyToken, async (req, res) => {
+  try {
+    const saved = await addSavedSearch(req.userId, req.body);
+    res.json({ success: true, data: saved });
+  } catch (error) {
+    console.error('Saved search error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/saved-searches', verifyToken, async (req, res) => {
+  try {
+    const searches = await getSavedSearches(req.userId);
+    res.json({ data: searches });
+  } catch (error) {
+    console.error('Saved search error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/saved-searches/:id', verifyToken, async (req, res) => {
+  try {
+    await deleteSavedSearch(req.userId, req.params.id);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Saved search delete error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/pipeline', verifyToken, async (req, res) => {
+  try {
+    const pipeline = await getUserPipeline(req.userId);
+    res.json({ data: pipeline });
+  } catch (error) {
+    console.error('Pipeline error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/pipeline', verifyToken, async (req, res) => {
+  try {
+    const prospect = await addPipelineProspect(req.userId, req.body);
+    res.json({ data: prospect });
+  } catch (error) {
+    if (error.message.includes('already exists')) {
+      return res.status(409).json({ error: 'Prospect déjà présent dans le pipeline' });
+    }
+    console.error('Pipeline error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/pipeline/:id', verifyToken, async (req, res) => {
+  try {
+    const prospect = await updatePipelineProspect(req.userId, req.params.id, req.body);
+    res.json({ data: prospect });
+  } catch (error) {
+    console.error('Pipeline update error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/pipeline/:id', verifyToken, async (req, res) => {
+  try {
+    await deletePipelineProspect(req.userId, req.params.id);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Pipeline delete error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Config Routes
 app.get('/api/config', verifyToken, async (req, res) => {
   try {
-    const config = await getConfig(req.user.uid);
-    res.json(config || {});
+    const key = req.query.key;
+    if (!key) {
+      return res.status(400).json({ error: 'Missing key parameter' });
+    }
+    const config = await getConfig(key);
+    res.json({ key, value: config });
   } catch (error) {
     console.error('Config fetch error:', error);
     res.status(500).json({ error: error.message });
@@ -162,7 +290,7 @@ app.post('/api/config', verifyToken, async (req, res) => {
     if (!key) {
       return res.status(400).json({ error: 'Missing key' });
     }
-    await setConfig(req.user.uid, key, value);
+    await setConfig(key, value);
     res.json({ success: true });
   } catch (error) {
     console.error('Config save error:', error);
@@ -174,7 +302,7 @@ app.post('/api/config', verifyToken, async (req, res) => {
 app.post('/api/usage/log', verifyToken, async (req, res) => {
   try {
     const { action, details } = req.body;
-    await logUsage(req.user.uid, action, details);
+    await logUsage(req.userId, action, details);
     res.json({ success: true });
   } catch (error) {
     console.error('Usage log error:', error);

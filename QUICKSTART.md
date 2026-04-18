@@ -43,15 +43,14 @@ Authentication → Domaines autorisés → Ajouter:
 
 ```bash
 # Backend
-cd server
-npm install firebase-admin axios dotenv
+npm install
 
 # Créer .env
 cp .env.example .env
 # Éditer .env avec vos credentials Firebase
 
 # Démarrer le serveur
-node server-firebase.js
+npm start
 ```
 
 ### 5️⃣ Déployer les règles Firestore
@@ -80,7 +79,7 @@ users/{uid}/pipeline/{id}      → Pipeline prospect
 
 ```bash
 # Terminal 1: Démarrer le serveur
-cd server && node server-firebase.js
+npm start
 
 # Terminal 2: Tester l'inscription
 curl -X POST http://localhost:3210/auth/sign-up \

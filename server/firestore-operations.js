@@ -136,12 +136,138 @@ async function searchCompanies(filters = {}) {
       query = query.where('active', '==', filters.active);
     }
 
-    const snapshot = await query.limit(filters.limit || 50).get();
-    const companies = [];
+    const requestedLimit = Math.min(Math.max(parseInt(filters.limit, 10) || 50, 1), 200);
+    const snapshot = await query.limit(requestedLimit).get();
+    let companies = [];
     snapshot.forEach((doc) => companies.push({ id: doc.id, ...doc.data() }));
+
+    if (filters.query) {
+      const q = filters.query.toString().trim().toLowerCase();
+      if (q) {
+        companies = companies.filter((company) => {
+          const values = [
+            company.raison_sociale,
+            company.sigle,
+            company.activite_principale,
+            company.sector,
+            company.region,
+            company.city,
+            company.centre_rattachement,
+            company.dirigeant,
+            company.email,
+          ];
+          return values.some((value) =>
+            typeof value === 'string' && value.toLowerCase().includes(q)
+          );
+        });
+      }
+    }
+
     return companies;
   } catch (error) {
     console.error('Error searching companies:', error);
+    throw error;
+  }
+}
+
+/**
+ * Ajouter une recherche sauvegardée
+ */
+async function addSavedSearch(uid, searchData) {
+  try {
+    const searchRef = db.collection('saved_searches').doc();
+    await searchRef.set({
+      uid,
+      title: searchData.title || 'Recherche sauvegardée',
+      query: searchData.query || '',
+      filters: searchData.filters || {},
+      results: searchData.results || [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+    return { id: searchRef.id, ...searchData };
+  } catch (error) {
+    console.error('Error adding saved search:', error);
+    throw error;
+  }
+}
+
+/**
+ * Récupérer les recherches sauvegardées d'un utilisateur
+ */
+async function getSavedSearches(uid) {
+  try {
+    const snapshot = await db
+      .collection('saved_searches')
+      .where('uid', '==', uid)
+      .orderBy('createdAt', 'desc')
+      .get();
+
+    const searches = [];
+    snapshot.forEach((doc) => searches.push({ id: doc.id, ...doc.data() }));
+    return searches;
+  } catch (error) {
+    console.error('Error getting saved searches:', error);
+    throw error;
+  }
+}
+
+/**
+ * Supprimer une recherche sauvegardée
+ */
+async function deleteSavedSearch(uid, searchId) {
+  try {
+    const docRef = db.collection('saved_searches').doc(searchId);
+    const doc = await docRef.get();
+    if (!doc.exists) return false;
+    if (doc.data().uid !== uid) throw new Error('Unauthorized');
+    await docRef.delete();
+    return true;
+  } catch (error) {
+    console.error('Error deleting saved search:', error);
+    throw error;
+  }
+}
+
+/**
+ * Mettre à jour un prospect dans le pipeline
+ */
+async function updatePipelineProspect(userId, prospectId, updateData) {
+  try {
+    const prospectRef = db
+      .collection('users')
+      .doc(userId)
+      .collection('pipeline')
+      .doc(prospectId);
+
+    await prospectRef.update({
+      ...updateData,
+      updatedAt: new Date().toISOString(),
+    });
+
+    const updatedDoc = await prospectRef.get();
+    return { id: updatedDoc.id, ...updatedDoc.data() };
+  } catch (error) {
+    console.error('Error updating pipeline prospect:', error);
+    throw error;
+  }
+}
+
+/**
+ * Supprimer un prospect dans le pipeline
+ */
+async function deletePipelineProspect(userId, prospectId) {
+  try {
+    const prospectRef = db
+      .collection('users')
+      .doc(userId)
+      .collection('pipeline')
+      .doc(prospectId);
+
+    await prospectRef.delete();
+    return true;
+  } catch (error) {
+    console.error('Error deleting pipeline prospect:', error);
     throw error;
   }
 }
@@ -234,12 +360,21 @@ async function getConfig(key) {
  */
 async function addPipelineProspect(userId, prospectData) {
   try {
-    const prospectRef = db
-      .collection('users')
-      .doc(userId)
-      .collection('pipeline')
-      .doc();
+    const pipelineRef = db.collection('users').doc(userId).collection('pipeline');
+    let query = pipelineRef;
 
+    if (prospectData.company_id) {
+      query = query.where('company_id', '==', prospectData.company_id);
+    } else if (prospectData.company_name) {
+      query = query.where('company_name', '==', prospectData.company_name);
+    }
+
+    const existing = await query.limit(1).get();
+    if (!existing.empty) {
+      throw new Error('Prospect already exists');
+    }
+
+    const prospectRef = pipelineRef.doc();
     await prospectRef.set({
       ...prospectData,
       id: prospectRef.id,
@@ -362,6 +497,13 @@ module.exports = {
   // Pipeline
   addPipelineProspect,
   getUserPipeline,
+  updatePipelineProspect,
+  deletePipelineProspect,
+
+  // Saved Searches
+  addSavedSearch,
+  getSavedSearches,
+  deleteSavedSearch,
 
   // Usage
   logUsage,

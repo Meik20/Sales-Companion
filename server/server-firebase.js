@@ -19,11 +19,18 @@ const { auth } = require('./firebase-config');
 const {
   verifyToken,
   verifyAdmin,
-  createUserDocument, // FIX [bug-1]: renommé pour créer uniquement le doc Firestore
+  createUser,
   getUser,
   updateUserPlan,
   searchCompanies,
   importCompaniesBatch,
+  addSavedSearch,
+  getSavedSearches,
+  deleteSavedSearch,
+  getUserPipeline,
+  addPipelineProspect,
+  updatePipelineProspect,
+  deletePipelineProspect,
   getConfig,
   setConfig,
   logUsage,
@@ -195,7 +202,7 @@ app.post('/auth/sign-up', authLimiter, async (req, res) => {
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password required' });
     }
-    const user = await createUserDocument(email, password, { name });
+    const user = await createUser(email, password, { name });
     res.json({ uid: user.uid, email: user.email, message: 'User created successfully' });
   } catch (error) {
     return safeError(res, 400, 'Erreur lors de la création du compte', error);
@@ -293,6 +300,144 @@ app.post('/api/companies/import', verifyAdmin, upload.single('file'), async (req
   } catch (error) {
     cleanup();
     return safeError(res, 500, "Erreur lors de l'import", error);
+  }
+});
+
+// ── CLIENT COMPATIBILITY ROUTES ──────────────────────────────────
+
+app.post('/api/search', verifyToken, async (req, res) => {
+  try {
+    const { query, filters = {} } = req.body;
+    const companies = await searchCompanies({
+      query,
+      sector: filters.secteur || filters.sector || null,
+      region: filters.region || null,
+      city: filters.ville || filters.city || null,
+      limit: filters.limit || 50,
+      active: true,
+    });
+
+    res.json({
+      count: companies.length,
+      source: 'database',
+      results: companies,
+    });
+  } catch (error) {
+    return safeError(res, 500, 'Erreur lors de la recherche', error);
+  }
+});
+
+app.post('/api/chat', verifyToken, async (req, res) => {
+  try {
+    const { messages } = req.body;
+    if (!Array.isArray(messages) || messages.length === 0) {
+      return res.status(400).json({ error: 'Messages are required' });
+    }
+
+    return res.json({
+      choices: [
+        {
+          message: {
+            content:
+              'Assistant IA non configuré. Veuillez définir la clé groq_api_key dans la configuration du serveur.',
+          },
+        },
+      ],
+    });
+  } catch (error) {
+    return safeError(res, 500, 'Erreur du chat IA', error);
+  }
+});
+
+app.post('/api/saved-searches', verifyToken, async (req, res) => {
+  try {
+    const saved = await addSavedSearch(req.userId, req.body);
+    res.json({ success: true, data: saved });
+  } catch (error) {
+    return safeError(res, 500, 'Impossible de sauvegarder la recherche', error);
+  }
+});
+
+app.get('/api/saved-searches', verifyToken, async (req, res) => {
+  try {
+    const searches = await getSavedSearches(req.userId);
+    res.json({ data: searches });
+  } catch (error) {
+    return safeError(res, 500, 'Impossible de charger les recherches sauvegardées', error);
+  }
+});
+
+app.delete('/api/saved-searches/:id', verifyToken, async (req, res) => {
+  try {
+    await deleteSavedSearch(req.userId, req.params.id);
+    res.json({ success: true });
+  } catch (error) {
+    return safeError(res, 500, 'Impossible de supprimer la recherche sauvegardée', error);
+  }
+});
+
+app.get('/api/pipeline', verifyToken, async (req, res) => {
+  try {
+    const pipeline = await getUserPipeline(req.userId);
+    res.json({ data: pipeline });
+  } catch (error) {
+    return safeError(res, 500, 'Impossible de charger le pipeline', error);
+  }
+});
+
+app.post('/api/pipeline', verifyToken, async (req, res) => {
+  try {
+    const prospect = await addPipelineProspect(req.userId, req.body);
+    res.json({ data: prospect });
+  } catch (error) {
+    if (error.message && error.message.includes('already exists')) {
+      return res.status(409).json({ error: 'Prospect déjà présent dans le pipeline' });
+    }
+    return safeError(res, 500, 'Impossible d’ajouter le prospect', error);
+  }
+});
+
+app.put('/api/pipeline/:id', verifyToken, async (req, res) => {
+  try {
+    const prospect = await updatePipelineProspect(req.userId, req.params.id, req.body);
+    res.json({ data: prospect });
+  } catch (error) {
+    return safeError(res, 500, 'Impossible de mettre à jour le pipeline', error);
+  }
+});
+
+app.delete('/api/pipeline/:id', verifyToken, async (req, res) => {
+  try {
+    await deletePipelineProspect(req.userId, req.params.id);
+    res.json({ success: true });
+  } catch (error) {
+    return safeError(res, 500, 'Impossible de supprimer le prospect du pipeline', error);
+  }
+});
+
+app.get('/api/config', verifyToken, async (req, res) => {
+  try {
+    const key = req.query.key;
+    if (!key) {
+      return res.status(400).json({ error: 'Config key is required' });
+    }
+    const value = await getConfig(key);
+    res.json({ key, value });
+  } catch (error) {
+    return safeError(res, 500, 'Impossible de récupérer la configuration', error);
+  }
+});
+
+app.post('/api/config', verifyToken, async (req, res) => {
+  try {
+    const { key, value } = req.body;
+    if (!key) {
+      return res.status(400).json({ error: 'Config key is required' });
+    }
+    await setConfig(key, value);
+    res.json({ success: true });
+  } catch (error) {
+    return safeError(res, 500, 'Impossible de sauvegarder la configuration', error);
   }
 });
 
@@ -399,21 +544,8 @@ app.post('/auth/register', authLimiter, async (req, res) => {
   let firebaseUser = null;
 
   try {
-    // Étape 1 : créer l'utilisateur dans Firebase Auth
-    firebaseUser = await auth.createUser({
-      email,
-      password,
-      displayName: name || email.split('@')[0],
-    });
+    firebaseUser = await createUser(email, password, { name });
 
-    // Étape 2 : créer le document Firestore (sans recréer Firebase Auth)
-    // FIX [bug-1]: createUserDocument ne doit créer QUE le doc Firestore
-    await createUserDocument(firebaseUser.uid, {
-      email,
-      name: name || email.split('@')[0],
-    });
-
-    // Étape 3 : obtenir un ID token via l'API REST Firebase
     const firebaseRes = await fetch(
       `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${process.env.FIREBASE_API_KEY}`,
       {
@@ -426,10 +558,6 @@ app.post('/auth/register', authLimiter, async (req, res) => {
     const firebaseData = await firebaseRes.json();
 
     if (firebaseData.error) {
-      // Rollback : supprimer l'utilisateur Firebase Auth créé à l'étape 1
-      await auth.deleteUser(firebaseUser.uid).catch((e) =>
-        console.error('[ROLLBACK FAILED] deleteUser:', e.message)
-      );
       return res.status(400).json({ error: 'Échec de la génération du token' });
     }
 
@@ -448,7 +576,7 @@ app.post('/auth/register', authLimiter, async (req, res) => {
     });
   } catch (error) {
     // FIX [bug-2]: rollback si Firebase Auth a été créé mais Firestore a échoué
-    if (firebaseUser) {
+    if (firebaseUser?.uid) {
       await auth.deleteUser(firebaseUser.uid).catch((e) =>
         console.error('[ROLLBACK FAILED] deleteUser:', e.message)
       );

@@ -8,7 +8,7 @@ echo ""
 echo " Démarrage du serveur..."
 echo ""
 
-cd "$(dirname "$0")/server"
+cd "$(dirname "$0")"
 
 # Vérifier Node.js
 if ! command -v node &> /dev/null; then
@@ -51,4 +51,4 @@ echo "  Ctrl+C pour arrêter"
 echo " =========================================="
 echo ""
 
-node server.js
+node server/server-firebase.js

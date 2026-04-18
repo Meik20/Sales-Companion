@@ -26,9 +26,8 @@ SalesCompanion/
 ## ÉTAPE 1 — Démarrer le serveur
 
 ```bash
-cd server
 npm install
-node server.js
+npm start
 ```
 
 ✅ Le serveur démarre sur **http://localhost:3210**

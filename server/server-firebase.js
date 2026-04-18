@@ -53,7 +53,21 @@ const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, 'uploads');
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR);
 
 // FIX [info-2]: helmet pour les en-têtes HTTP de sécurité
-app.use(helmet());
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'"],
+        scriptSrcAttr: ["'unsafe-inline'"],
+        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+        fontSrc: ["'self'", "https://fonts.gstatic.com"],
+        imgSrc: ["'self'", "data:", "https:"],
+        connectSrc: ["'self'", "https://*.firebaseapp.com", "https://*.googleapis.com"],
+      },
+    },
+  })
+);
 
 // FIX [warn-1]: CORS restreint aux origines connues
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'http://localhost:3210').split(',');
@@ -71,7 +85,15 @@ app.use(
 );
 
 app.use(express.json({ limit: '10mb' }));
+
+// ── ADMIN PANEL SPA (Single Page Application) ─────────────────
+// Serve static files, fallback to index.html for SPA routing
 app.use(express.static(path.join(__dirname, 'admin')));
+app.get('/admin*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'admin', 'index.html'));
+});
+
+// ── MOBILE APP (PWA) ──────────────────────────────────────────
 app.use('/mobile', express.static(path.join(__dirname, '..', 'mobile')));
 
 // ── RATE LIMITING ──────────────────────────────────────────────
@@ -523,6 +545,11 @@ app.get('/mobile', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'mobile', 'index.html'));
 });
 
+// ── LANDING PAGE ────────────────────────────────────────────────
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'landing.html'));
+});
+
 // ── CLIENT COMPATIBILITY ROUTES ─────────────────────────────────
 
 /**
@@ -629,6 +656,226 @@ app.post('/auth/login', authLimiter, async (req, res) => {
     });
   } catch (error) {
     return safeError(res, 500, 'Erreur de connexion', error);
+  }
+});
+
+// ── ADMIN ROUTES ────────────────────────────────────────────────
+
+/**
+ * GET /admin/stats
+ * Statistiques du panel admin
+ */
+app.get('/admin/stats', verifyAdmin, async (req, res) => {
+  try {
+    // Récupérer les statistiques depuis Firestore
+    const db = require('firebase-admin').firestore();
+    const [usersSnap, companiesSnap, logsSnap] = await Promise.all([
+      db.collection('users').count().get(),
+      db.collection('companies').count().get(),
+      db.collection('usage_logs').orderBy('timestamp', 'desc').limit(100).get(),
+    ]);
+
+    const totalUsers = usersSnap.data().count || 0;
+    const totalCompanies = companiesSnap.data().count || 0;
+    const today = new Date().toISOString().split('T')[0];
+
+    let activeToday = 0;
+    let totalSearches = 0;
+    const companiesByRegion = {};
+    const companiesBySecteur = {};
+    const planCounts = { free: 0, starter: 0, pro: 0, enterprise: 0 };
+    const recentLogs = [];
+
+    logsSnap.forEach(doc => {
+      const log = doc.data();
+      if (log.timestamp && log.timestamp.toDate().toISOString().split('T')[0] === today) activeToday++;
+      totalSearches++;
+      recentLogs.push({
+        name: log.user_name || 'Utilisateur',
+        query: log.query || '—',
+        results_count: log.results_count || 0,
+        plan: log.plan || 'free',
+      });
+    });
+
+    res.json({
+      totalUsers,
+      totalCompanies,
+      activeToday,
+      totalSearches,
+      companiesByRegion: Object.entries(companiesByRegion).map(([region, c]) => ({ region, c })).sort((a, b) => b.c - a.c),
+      companiesBySecteur: Object.entries(companiesBySecteur).map(([secteur, c]) => ({ secteur, c })).sort((a, b) => b.c - a.c),
+      planCounts: Object.entries(planCounts).map(([plan, c]) => ({ plan, c })),
+      recentLogs: recentLogs.slice(0, 8),
+    });
+  } catch (error) {
+    return safeError(res, 500, 'Erreur de statistiques', error);
+  }
+});
+
+/**
+ * POST /admin/import
+ * Importer des entreprises via Excel/CSV
+ */
+app.post('/admin/import', verifyAdmin, upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Aucun fichier fourni' });
+    }
+
+    const filePath = req.file.path;
+    const fileName = req.file.originalname;
+
+    // Lire le fichier Excel/CSV
+    const workbook = XLSX.readFile(filePath);
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet);
+
+    if (rows.length === 0) {
+      fs.unlinkSync(filePath);
+      return res.status(400).json({ error: 'Fichier vide' });
+    }
+
+    // Importer les entreprises (batch)
+    const result = await importCompaniesBatch(rows);
+
+    // Enregistrer le log d'import
+    const db = require('firebase-admin').firestore();
+    await db.collection('import_logs').add({
+      filename: fileName,
+      timestamp: new Date(),
+      rows_processed: rows.length,
+      rows_imported: result.imported,
+      rows_failed: result.failed,
+      admin_uid: req.user.uid,
+    });
+
+    fs.unlinkSync(filePath);
+
+    res.json({
+      success: true,
+      message: `${result.imported} entreprises importées`,
+      imported: result.imported,
+      failed: result.failed,
+      duplicates: result.duplicates || 0,
+    });
+  } catch (error) {
+    if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+    return safeError(res, 500, "Erreur lors de l'import", error);
+  }
+});
+
+// ── AUTH LOGIN ROUTES ────────────────────────────────────────────
+/**
+ * POST /admin/login
+ * Authentification admin avec vérification du rôle
+ */
+app.post('/admin/login', authLimiter, async (req, res) => {
+  try {
+    const { username, password, email } = req.body;
+    const identifier = email || username;
+
+    if (!identifier || !password) {
+      return res.status(400).json({ error: 'Email/ID et mot de passe requis' });
+    }
+
+    // Authentifier via Firebase REST API
+    const firebaseRes = await fetch(
+      `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${process.env.FIREBASE_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: identifier, password, returnSecureToken: true }),
+      }
+    );
+
+    const firebaseData = await firebaseRes.json();
+    if (firebaseData.error) {
+      return res.status(401).json({ error: 'Email ou mot de passe incorrect' });
+    }
+
+    // Vérifier que l'utilisateur est bien admin via custom claims
+    const userRecord = await auth.getUser(firebaseData.localId);
+    const isAdmin = userRecord.customClaims?.admin === true;
+    
+    if (!isAdmin) {
+      return res.status(403).json({ error: 'Accès refusé — admin uniquement' });
+    }
+
+    // Récupérer les données utilisateur
+    const user = await getUser(firebaseData.localId);
+
+    // Log connexion admin
+    await logUsage(firebaseData.localId, 'admin_login');
+
+    res.json({
+      token: firebaseData.idToken,
+      user: {
+        uid: firebaseData.localId,
+        email: firebaseData.email,
+        name: user?.name || identifier.split('@')[0],
+        role: 'admin',
+      },
+    });
+  } catch (error) {
+    return safeError(res, 500, 'Erreur de connexion admin', error);
+  }
+});
+
+// ── ADMIN INIT ROUTE ────────────────────────────────────────────
+/**
+ * POST /init-admin
+ * Créer utilisateur admin initial (à appeler une seule fois)
+ */
+app.post('/init-admin', async (req, res) => {
+  try {
+    const { adminEmail = 'admin@sales-companion.local', adminPassword = 'admin123' } = req.body;
+    
+    // Importer db depuis firestore-operations
+    const admin = require('firebase-admin');
+    const db = admin.firestore();
+
+    // Vérifier qu'il n'y a pas déjà d'admin
+    const existingAdmins = await auth.listUsers();
+    for (const user of existingAdmins.users) {
+      if (user.customClaims?.admin === true) {
+        return res.status(400).json({ error: 'Admin existe déjà' });
+      }
+    }
+
+    // Créer l'utilisateur admin
+    const adminUser = await auth.createUser({
+      email: adminEmail,
+      password: adminPassword,
+      displayName: 'Admin',
+    });
+
+    // Ajouter custom claims
+    await auth.setCustomUserClaims(adminUser.uid, { admin: true });
+
+    // Créer document Firestore
+    await db.collection('users').doc(adminUser.uid).set({
+      uid: adminUser.uid,
+      email: adminEmail,
+      name: 'Admin',
+      role: 'admin',
+      plan: 'enterprise',
+      dailyLimit: 9999,
+      dailyUsed: 0,
+      lastReset: new Date().toISOString(),
+      active: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    res.json({
+      success: true,
+      message: 'Admin créé avec succès',
+      email: adminEmail,
+      uid: adminUser.uid,
+    });
+  } catch (error) {
+    return safeError(res, 500, 'Erreur lors de la création admin', error);
   }
 });
 

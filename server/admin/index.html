@@ -425,7 +425,9 @@ async function doLogin(){
   const p=document.getElementById('login-pass').value;
   const err=document.getElementById('login-err');err.style.display='none';
   try{
-    const r=await fetch(`${API}/admin/login`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})});
+    // Convertir 'admin' en email valide pour Firebase
+    const email = u.includes('@') ? u : (u === 'admin' ? 'admin@sales-companion.local' : u + '@sales-companion.local');
+    const r=await fetch(`${API}/admin/login`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password:p})});
     const d=await r.json();
     if(!r.ok){err.textContent=d.error;err.style.display='block';return;}
     adminToken=d.token;localStorage.setItem('sc_admin_token',adminToken);

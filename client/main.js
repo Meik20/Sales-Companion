@@ -169,8 +169,9 @@ function request(serverUrl, method, reqPath, body, token) {
           }
 
           if (res.statusCode >= 400) {
+            const errorMessage = parsed?.error || parsed?.message || `Erreur HTTP ${res.statusCode}`;
             return reject(
-              new Error(parsed?.message || `Erreur HTTP ${res.statusCode}`)
+              new Error(`${errorMessage} (HTTP ${res.statusCode})`)
             );
           }
 

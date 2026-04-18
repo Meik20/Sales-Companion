@@ -62,7 +62,7 @@ body{font-family:'Outfit',sans-serif;color:var(--tx);display:flex;flex-direction
 .nav-btn.active .nav-bar{position:absolute;top:0;left:20%;right:20%;height:3px;background:var(--g);border-radius:0 0 3px 3px}
 
 /* ── AUTH ── */
-.auth-screen{position:fixed;inset:0;background:linear-gradient(160deg,var(--gd),var(--g));display:flex;align-items:center;justify-content:center;z-index:200;padding:20px}
+.auth-screen{position:fixed;inset:0;background:linear-gradient(160deg,var(--gd),var(--g));display:none;align-items:center;justify-content:center;z-index:200;padding:20px}
 .auth-sheet{background:#fff;border-radius:24px;width:100%;max-width:440px;padding:36px 28px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
 .auth-logo{text-align:center;margin-bottom:22px}
 .auth-logo .icon{width:56px;height:56px;background:var(--g);border-radius:14px;display:flex;align-items:center;justify-content:center;margin:0 auto 10px}
@@ -770,6 +770,7 @@ async function checkCachedToken(){
   }catch(e){
     console.log('[App Init] Error in checkCachedToken:', e.message);
   }
+  console.log('[App Init] No valid token found, will show auth screen');
   isInitializing=false;
   return false;
 }
@@ -805,7 +806,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     return;
   }
   
-  // If no cached token, set up Firebase auth listener
+  // No valid cached token, show auth screen
+  console.log('[App Init] No valid cached token, showing auth screen');
+  showAuth();
+  
+  // Set up Firebase auth listener for new logins
   waitForFirebase(() => {
     if (!auth) {
       console.error('✗ Firebase Auth not ready');
@@ -831,6 +836,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       } else {
         token = '';
         localStorage.removeItem('sc_token');
+        showAuth();
       }
     });
   });
@@ -946,20 +952,11 @@ async function doRegister() {
   btn.disabled = false; btn.textContent = 'Créer mon compte →';
   isInitializing=false;
 }
-function showApp() {
-  document.getElementById('auth-screen').style.display = 'none';
-  document.getElementById('topbar').style.display = 'flex';
-  document.getElementById('content').style.display = 'flex';
-  document.getElementById('bottom-nav').style.display = 'flex';
-  if (user) {
-    document.getElementById('tb-name').textContent = user.name;
-    const pb = document.getElementById('tb-plan');
-    const pmap = { free: 'pf', starter: 'ps_', pro: 'pp', enterprise: 'pe' };
-    pb.textContent = user.plan; pb.className = 'plan-b ' + (pmap[user.plan] || 'pf');
-    refreshMe();
-    loadPipeline();
-    loadSaved();
-  }
+function showAuth() {
+  document.getElementById('auth-screen').style.display = 'flex';
+  document.getElementById('topbar').style.display = 'none';
+  document.getElementById('content').style.display = 'none';
+  document.getElementById('bottom-nav').style.display = 'none';
 }
 async function refreshMe() {
   try {
@@ -970,10 +967,7 @@ async function refreshMe() {
 function doLogout() {
   auth.signOut().catch(e=>console.error('Logout error:',e));
   localStorage.removeItem('sc_token'); token = ''; user = null;
-  document.getElementById('topbar').style.display = 'none';
-  document.getElementById('content').style.display = 'none';
-  document.getElementById('bottom-nav').style.display = 'none';
-  document.getElementById('auth-screen').style.display = 'flex';
+  showAuth();
   closeSheet('profile-sheet');
 }
 

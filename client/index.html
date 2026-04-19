@@ -909,6 +909,18 @@ function addToPipelineFromCard(idx){
   openAddPipeline({...co,company_name:co.raison_sociale});
 }
 
+function growCompanyForPipeline(co){
+  return {
+    name: co.raison_sociale || co.company_name || co.nom || co.name || '',
+    sector: co.secteur || co.activite_principale || '',
+    city: co.ville || co.region || '',
+    phone: co.telephone || co.tel || '',
+    email: co.email || co.contact_email || '',
+    id: co.id || co.siren || co.niu || null,
+    director: co.dirigeant || co.company_director || ''
+  };
+}
+
 function toggleMap(id,src){
   const p=document.getElementById(`map-${id}`);if(!p)return;
   const wasOpen=p.classList.contains('open');
@@ -1102,14 +1114,15 @@ function renderPipeline(){
 }
 
 function openAddPipeline(co){
-  addPipelineDefault=co||{};
-  document.getElementById('pip-name').value=co?.raison_sociale||co?.company_name||'';
-  document.getElementById('pip-sector').value=co?.secteur||'';
-  document.getElementById('pip-city').value=co?.ville||'';
-  document.getElementById('pip-phone').value=co?.telephone||'';
-  document.getElementById('pip-email').value=co?.email||'';
-  document.getElementById('pip-note').value='';
-  document.getElementById('pip-status').value='prospection';
+  const company = co ? growCompanyForPipeline(co) : { name:'', sector:'', city:'', phone:'', email:'', id:null, director:'' };
+  addPipelineDefault = co || {};
+  document.getElementById('pip-name').value = company.name;
+  document.getElementById('pip-sector').value = company.sector;
+  document.getElementById('pip-city').value = company.city;
+  document.getElementById('pip-phone').value = company.phone;
+  document.getElementById('pip-email').value = company.email;
+  document.getElementById('pip-note').value = '';
+  document.getElementById('pip-status').value = 'prospection';
   document.getElementById('pip-overlay').classList.add('open');
 }
 
@@ -1125,8 +1138,8 @@ async function confirmAddPipeline(){
       company_email:document.getElementById('pip-email').value,
       status:document.getElementById('pip-status').value,
       note:document.getElementById('pip-note').value,
-      company_id:addPipelineDefault.id||null,
-      company_director:addPipelineDefault.dirigeant||null,
+      company_id:addPipelineDefault.id||addPipelineDefault.siren||addPipelineDefault.niu||null,
+      company_director:addPipelineDefault.dirigeant||addPipelineDefault.company_director||null,
     });
     if(r.status===409){toast('⚠️ Déjà dans le pipeline');document.getElementById('pip-overlay').classList.remove('open');return;}
     if(r.status!==200){toast('Erreur: '+(r.data.error||''));return;}

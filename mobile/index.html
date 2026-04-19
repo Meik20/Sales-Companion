@@ -1162,15 +1162,27 @@ function shareCard(i) {
   }
 }
 
+function normalizeCompanyForPipeline(co) {
+  return {
+    name: co.raison_sociale || co.company_name || co.nom || co.name || '',
+    sector: co.secteur || co.activite_principale || '',
+    city: co.ville || co.region || '',
+    phone: co.telephone || co.tel || '',
+    email: co.email || co.contact_email || '',
+    id: co.id || co.siren || co.niu || null,
+    director: co.dirigeant || co.company_director || ''
+  };
+}
+
 function addToPipCard(i) {
   const co = lastResults[i]; if (!co) return;
-  const name = co.raison_sociale || co.company_name || co.nom || co.name || '';
+  const p = normalizeCompanyForPipeline(co);
   addPipDefault = co;
-  document.getElementById('pip-name').value = name;
-  document.getElementById('pip-sector').value = co.secteur || '';
-  document.getElementById('pip-city').value = co.ville || '';
-  document.getElementById('pip-phone').value = co.telephone || '';
-  document.getElementById('pip-email').value = co.email || '';
+  document.getElementById('pip-name').value = p.name;
+  document.getElementById('pip-sector').value = p.sector;
+  document.getElementById('pip-city').value = p.city;
+  document.getElementById('pip-phone').value = p.phone;
+  document.getElementById('pip-email').value = p.email;
   document.getElementById('pip-note').value = '';
   document.getElementById('pip-status').value = 'prospection';
   openSheet('add-pip-sheet');
@@ -1230,7 +1242,17 @@ async function confirmAddPipeline() {
   const name = document.getElementById('pip-name').value.trim();
   if (!name) { toast('Saisissez le nom de l\'entreprise'); return; }
   try {
-    const r = await api('POST', '/api/pipeline', { company_name: name, company_sector: document.getElementById('pip-sector').value, company_city: document.getElementById('pip-city').value, company_phone: document.getElementById('pip-phone').value, company_email: document.getElementById('pip-email').value, status: document.getElementById('pip-status').value, note: document.getElementById('pip-note').value, company_id: addPipDefault.id || null, company_director: addPipDefault.dirigeant || null }, token);
+    const r = await api('POST', '/api/pipeline', {
+      company_name: name,
+      company_sector: document.getElementById('pip-sector').value,
+      company_city: document.getElementById('pip-city').value,
+      company_phone: document.getElementById('pip-phone').value,
+      company_email: document.getElementById('pip-email').value,
+      status: document.getElementById('pip-status').value,
+      note: document.getElementById('pip-note').value,
+      company_id: addPipDefault.id || addPipDefault.siren || addPipDefault.niu || null,
+      company_director: addPipDefault.dirigeant || addPipDefault.company_director || null
+    }, token);
     const d = await r.json();
     if (r.status === 409) { toast('⚠️ Déjà dans le pipeline'); closeSheet('add-pip-sheet'); return; }
     if (!r.ok) { toast('Erreur: ' + (d.error || '')); return; }

@@ -421,11 +421,63 @@ const PLAN_INFO = {
   enterprise: {label:'Entreprise', badge:'b-enterprise', icon:'🏢'}
 };
 
-// ── FIX : H déclaré AVANT toute utilisation ──────────────────
-let adminToken = localStorage.getItem('sc_admin_token');
+let adminToken        = localStorage.getItem('sc_admin_token');
+let adminRefreshToken = localStorage.getItem('sc_admin_refresh');
+let allUsers = [], coPage = 1, coSearchTimer = null;
+
 const H = () => ({'Content-Type':'application/json','Authorization':`Bearer ${adminToken}`});
 
-let allUsers = [], coPage = 1, coSearchTimer = null;
+async function refreshAdminToken() {
+  if (!adminRefreshToken) return false;
+  try {
+    const res  = await fetch(`https://securetoken.googleapis.com/v1/token?key=${await getFirebaseApiKey()}`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/x-www-form-urlencoded'},
+      body: `grant_type=refresh_token&refresh_token=${adminRefreshToken}`
+    });
+    const data = await res.json();
+    if (data.id_token) {
+      adminToken = data.id_token;
+      if (data.refresh_token) adminRefreshToken = data.refresh_token;
+      localStorage.setItem('sc_admin_token',   adminToken);
+      localStorage.setItem('sc_admin_refresh', adminRefreshToken);
+      console.log('[Auth] Token rafraîchi ✅');
+      return true;
+    }
+  } catch(e) { console.error('[Auth] Refresh échoué:', e); }
+  return false;
+}
+
+async function getFirebaseApiKey() {
+  try {
+    const r = await fetch(`${API}/api/config/firebase`);
+    const d = await r.json();
+    return d.apiKey;
+  } catch(_) { return ''; }
+}
+
+async function apiFetch(url, options = {}) {
+  options.headers = { ...H(), ...(options.headers || {}) };
+  if (options.body instanceof FormData) {
+    delete options.headers['Content-Type'];
+    delete options.headers['content-type'];
+  }
+  let res = await fetch(url, options);
+  if (res.status === 401) {
+    console.log('[Auth] 401 reçu — tentative de refresh...');
+    const refreshed = await refreshAdminToken();
+    if (refreshed) {
+      options.headers = { ...H(), ...(options.headers || {}) };
+      if (options.body instanceof FormData) {
+        delete options.headers['Content-Type'];
+        delete options.headers['content-type'];
+      }
+      res = await fetch(url, options);
+    }
+    if (res.status === 401) { logout(); return null; }
+  }
+  return res;
+}
 
 // Auto-login si token présent
 if (adminToken) showApp();
@@ -438,15 +490,30 @@ async function doLogin() {
   err.style.display = 'none';
   try {
     const email = u.includes('@') ? u : (u === 'admin' ? 'admin@sales-companion.local' : u + '@sales-companion.local');
+    
+    // Login direct Firebase pour récupérer le refresh token
+    const firebaseKey = await getFirebaseApiKey();
+    const fbRes  = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${firebaseKey}`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({email, password: p, returnSecureToken: true})
+    });
+    const fbData = await fbRes.json();
+    if (fbData.error) { err.textContent = 'Email ou mot de passe incorrect'; err.style.display='block'; return; }
+
+    // Vérifier le rôle admin via notre serveur
     const r = await fetch(`${API}/admin/login`, {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({email, password: p})
     });
     const d = await r.json();
-    if (!r.ok) { err.textContent = d.error; err.style.display = 'block'; return; }
-    adminToken = d.token;
-    localStorage.setItem('sc_admin_token', adminToken);
+    if (!r.ok) { err.textContent = d.error; err.style.display='block'; return; }
+
+    adminToken        = d.token;
+    adminRefreshToken = fbData.refreshToken;
+    localStorage.setItem('sc_admin_token',   adminToken);
+    localStorage.setItem('sc_admin_refresh', adminRefreshToken);
     showApp();
   } catch(e) {
     err.textContent = 'Serveur inaccessible';
@@ -456,7 +523,8 @@ async function doLogin() {
 
 function logout() {
   localStorage.removeItem('sc_admin_token');
-  adminToken = null;
+  localStorage.removeItem('sc_admin_refresh');
+  adminToken = null; adminRefreshToken = null;
   document.getElementById('app').style.display = 'none';
   document.getElementById('auth-page').style.display = 'flex';
 }
@@ -482,8 +550,8 @@ function showPage(name, el) {
 // ── DASHBOARD ─────────────────────────────────────────────────
 async function loadDashboard() {
   try {
-    const r = await fetch(`${API}/admin/stats`, {headers: H()});
-    if (r.status === 401) { logout(); return; }
+    const r = await apiFetch(`${API}/admin/stats`, {headers: H()});
+    if (!r || r.status === 401) { return; }
     const d = await r.json();
 
     document.getElementById('s-users').textContent = d.totalUsers ?? '—';
@@ -493,8 +561,18 @@ async function loadDashboard() {
 
     // API Groq status
     try {
-      const cr  = await fetch(`${API}/admin/config`, {headers: H()});
-      const cfg = await cr.json();
+      const cr  = await apiFetch(`${API}/admin/config`, {headers: H()});
+      if (cr) {
+        const cfg = await cr.json();
+        const ae  = document.getElementById('s-api');
+        if (cfg.groq_api_key) {
+          ae.textContent = '✅ OK'; ae.style.color = 'var(--g)';
+          document.getElementById('s-api-sub').textContent = 'Chat IA actif';
+        } else {
+          ae.textContent = '❌ Manquante'; ae.style.color = 'var(--red)';
+          document.getElementById('s-api-sub').textContent = 'Chat IA inactif';
+        }
+      }
       const ae  = document.getElementById('s-api');
       if (cfg.groq_api_key) {
         ae.textContent = '✅ OK'; ae.style.color = 'var(--g)';
@@ -566,9 +644,8 @@ async function processFile(file) {
   const fd = new FormData(); fd.append('file', file);
   try {
     document.getElementById('progress-fill').style.width = '70%';
-    const r = await fetch(API + '/admin/import', {
+    const r = await apiFetch(API + '/admin/import', {
       method: 'POST',
-      headers: {'Authorization': 'Bearer ' + adminToken},
       body: fd
     });
     document.getElementById('progress-fill').style.width = '100%';
@@ -616,7 +693,8 @@ async function processFile(file) {
 // ── FIX : loadImportLogs gère tableau direct OU {data:[]} ─────
 async function loadImportLogs() {
   try {
-    const r    = await fetch(`${API}/admin/import-logs`, {headers: H()});
+    const r    = await apiFetch(`${API}/admin/import-logs`, {headers: H()});
+    if (!r) return;
     const body = await r.json();
     // Le serveur peut renvoyer un tableau direct ou {data:[...]}
     const logs = Array.isArray(body) ? body : (body.data || []);
@@ -653,7 +731,8 @@ async function loadCompanies(page) {
   if (region)  params.set('region', region);
   if (secteur) params.set('secteur', secteur);
   try {
-    const r = await fetch(`${API}/admin/companies?${params}`, {headers: H()});
+    const r = await apiFetch(`${API}/admin/companies?${params}`, {headers: H()});
+    if (!r) return;
     const d = await r.json();
     document.getElementById('co-count').textContent      = `${(d.total||0).toLocaleString()} résultats`;
     document.getElementById('co-total-badge').textContent = `Total DB : ${(d.total||0).toLocaleString()} entreprises`;
@@ -688,15 +767,15 @@ async function loadCompanies(page) {
 
 async function delCompany(id, name) {
   if (!confirm(`Retirer "${name}" de la base ?`)) return;
-  const r = await fetch(`${API}/admin/companies/${id}`, {method:'DELETE', headers: H()});
-  if (r.ok) { toast('✅ Entreprise retirée'); loadCompanies(coPage); }
+  const r = await apiFetch(`${API}/admin/companies/${id}`, {method:'DELETE', headers: H()});
+  if (r && r.ok) { toast('✅ Entreprise retirée'); loadCompanies(coPage); }
 }
 
 async function deleteAllCompanies() {
   const conf = prompt('Tapez SUPPRIMER pour vider toute la base de données entreprises :');
   if (conf !== 'SUPPRIMER') { toast('Opération annulée'); return; }
   try {
-    const r = await fetch(API + '/admin/companies/all', {
+    const r = await apiFetch(API + '/admin/companies/all', {
       method: 'DELETE',
       headers: H(),
       body: JSON.stringify({confirm: 'SUPPRIMER'})
@@ -710,7 +789,8 @@ async function deleteAllCompanies() {
 // ── USERS ─────────────────────────────────────────────────────
 async function loadUsers() {
   try {
-    const r    = await fetch(`${API}/admin/users`, {headers: H()});
+    const r    = await apiFetch(`${API}/admin/users`, {headers: H()});
+    if (!r) return;
     const body = await r.json();
     allUsers   = Array.isArray(body) ? body : (body.data || []);
     renderUsers(allUsers);
@@ -749,25 +829,27 @@ function renderUsers(users) {
 }
 
 async function changePlan(id, plan) {
-  const r = await fetch(`${API}/admin/users/${id}/plan`, {method:'POST', headers: H(), body: JSON.stringify({plan})});
-  if (r.ok) toast(`✅ Plan : ${PLAN_INFO[plan].label}`);
+  const r = await apiFetch(`${API}/admin/users/${id}/plan`, {method:'POST', headers: H(), body: JSON.stringify({plan})});
+  if (r && r.ok) toast(`✅ Plan : ${PLAN_INFO[plan].label}`);
   loadUsers();
 }
 async function toggleUser(id) {
-  const r = await fetch(`${API}/admin/users/${id}/toggle`, {method:'POST', headers: H()});
+  const r = await apiFetch(`${API}/admin/users/${id}/toggle`, {method:'POST', headers: H()});
+  if (!r) return;
   const d = await r.json();
   if (r.ok) { toast(d.active ? '✅ Compte activé' : '⚠️ Compte désactivé'); loadUsers(); }
 }
 async function deleteUser(id, name) {
   if (!confirm(`Supprimer "${name}" ?`)) return;
-  const r = await fetch(`${API}/admin/users/${id}`, {method:'DELETE', headers: H()});
-  if (r.ok) { toast('🗑️ Supprimé'); loadUsers(); }
+  const r = await apiFetch(`${API}/admin/users/${id}`, {method:'DELETE', headers: H()});
+  if (r && r.ok) { toast('🗑️ Supprimé'); loadUsers(); }
 }
 
 // ── LOGS ──────────────────────────────────────────────────────
 async function loadLogs() {
   try {
-    const r = await fetch(`${API}/admin/stats`, {headers: H()});
+    const r = await apiFetch(`${API}/admin/stats`, {headers: H()});
+    if (!r) return;
     const d = await r.json();
     document.getElementById('logs-body').innerHTML =
       (d.recentLogs || []).map(l => `<tr>
@@ -784,7 +866,8 @@ async function loadLogs() {
 // ── CONFIG ────────────────────────────────────────────────────
 async function loadConfig() {
   try {
-    const r = await fetch(`${API}/admin/config`, {headers: H()});
+    const r = await apiFetch(`${API}/admin/config`, {headers: H()});
+    if (!r) return;
     const d = await r.json();
     if (d.groq_api_key) document.getElementById('cfg-key').placeholder = '••••••••••••••• (active)';
   } catch(e) {}
@@ -793,7 +876,7 @@ async function loadConfig() {
 async function saveConfig() {
   const k = document.getElementById('cfg-key').value.trim();
   if (!k) { toast('Saisissez une clé'); return; }
-  const r = await fetch(`${API}/admin/config`, {
+  const r = await apiFetch(`${API}/admin/config`, {
     method: 'POST',
     headers: H(),
     body: JSON.stringify({ key: 'groq_api_key', value: k }),
@@ -810,7 +893,8 @@ async function saveConfig() {
 async function changePass() {
   const p = document.getElementById('new-pass').value;
   if (!p || p.length < 6) { toast('Minimum 6 caractères'); return; }
-  const r = await fetch(`${API}/admin/change-password`, {method:'POST', headers: H(), body: JSON.stringify({newPassword: p})});
+  const r = await apiFetch(`${API}/admin/change-password`, {method:'POST', headers: H(), body: JSON.stringify({newPassword: p})});
+  if (!r) return;
   const d = await r.json();
   if (r.ok) {
     document.getElementById('pass-ok').style.display = 'block';

@@ -958,16 +958,25 @@ function showAuth() {
   document.getElementById('content').style.display = 'none';
   document.getElementById('bottom-nav').style.display = 'none';
 }
+function updateTopbar() {
+  const name = user?.name || user?.email?.split('@')[0] || 'Utilisateur';
+  const plan = (user?.plan || 'free').toLowerCase();
+  document.getElementById('tb-name').textContent = name;
+  const planEl = document.getElementById('tb-plan');
+  planEl.textContent = plan;
+  planEl.className = `plan-b ${plan === 'free' ? 'pf' : plan === 'starter' ? 'ps_' : plan === 'pro' ? 'pp' : 'pe'}`;
+}
 function showApp() {
   document.getElementById('auth-screen').style.display = 'none';
   document.getElementById('topbar').style.display = 'flex';
   document.getElementById('content').style.display = 'flex';
   document.getElementById('bottom-nav').style.display = 'flex';
+  updateTopbar();
 }
 async function refreshMe() {
   try {
     const r = await api('GET', '/auth/me', null, token);
-    if (r.ok) { user = await r.json(); }
+    if (r.ok) { user = await r.json(); updateTopbar(); }
   } catch {}
 }
 function doLogout() {
@@ -1085,15 +1094,16 @@ function renderResults(data) {
   area.appendChild(saveWrap);
   companies.forEach((co, i) => {
     const id = 'co-' + i;
-    const initials = (co.raison_sociale || '?').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
-    const mapQ = encodeURIComponent((co.raison_sociale || '') + ' ' + (co.ville || '') + ' Cameroun');
+    const name = co.raison_sociale || co.company_name || co.nom || co.name || '—';
+    const initials = name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+    const mapQ = encodeURIComponent(name + ' ' + (co.ville || '') + ' Cameroun');
     const card = document.createElement('div');
     card.className = 'co-card';
     card.innerHTML = `
       <div class="co-head">
         <div class="co-av">${initials}</div>
         <div class="co-meta">
-          <div class="co-name">${co.raison_sociale || '—'}${co.sigle ? ` <span style="font-size:11px;color:var(--tx3)">(${co.sigle})</span>` : ''}</div>
+          <div class="co-name">${name}${co.sigle ? ` <span style="font-size:11px;color:var(--tx3)">(${co.sigle})</span>` : ''}</div>
           <div class="co-sub">${co.secteur ? '📂 ' + co.secteur : ''}${co.ville ? ' · 📍 ' + co.ville : ''}</div>
           <div class="co-badges">
             ${co.statut_juridique ? `<span class="cbadge cb-type">${co.statut_juridique}</span>` : ''}
@@ -1141,9 +1151,10 @@ function toggleMapM(id, query) {
 
 function shareCard(i) {
   const co = lastResults[i]; if (!co) return;
-  const txt = `🏢 *${co.raison_sociale || '—'}*\n📂 ${co.secteur || '—'} · 📍 ${[co.ville, co.region].filter(Boolean).join(', ') || '—'}\n${co.dirigeant ? '👤 ' + co.dirigeant + '\n' : ''}${co.telephone ? '📞 ' + co.telephone + '\n' : ''}${co.email ? '📧 ' + co.email + '\n' : ''}${co.rccm ? '📋 RCCM: ' + co.rccm + '\n' : ''}${co.niu ? '🔑 NIU: ' + co.niu : ''}\n\n_Partagé via Sales Companion_`;
+  const name = co.raison_sociale || co.company_name || co.nom || co.name || '—';
+  const txt = `🏢 *${name}*\n📂 ${co.secteur || '—'} · 📍 ${[co.ville, co.region].filter(Boolean).join(', ') || '—'}\n${co.dirigeant ? '👤 ' + co.dirigeant + '\n' : ''}${co.telephone ? '📞 ' + co.telephone + '\n' : ''}${co.email ? '📧 ' + co.email + '\n' : ''}${co.rccm ? '📋 RCCM: ' + co.rccm + '\n' : ''}${co.niu ? '🔑 NIU: ' + co.niu : ''}\n\n_Partagé via Sales Companion_`;
   if (navigator.share) {
-    navigator.share({ title: co.raison_sociale, text: txt }).catch(() => {});
+    navigator.share({ title: name, text: txt }).catch(() => {});
   } else {
     navigator.clipboard.writeText(txt).then(() => toast('✅ Fiche copiée')).catch(() => toast('Copie impossible'));
   }
@@ -1151,8 +1162,9 @@ function shareCard(i) {
 
 function addToPipCard(i) {
   const co = lastResults[i]; if (!co) return;
+  const name = co.raison_sociale || co.company_name || co.nom || co.name || '';
   addPipDefault = co;
-  document.getElementById('pip-name').value = co.raison_sociale || '';
+  document.getElementById('pip-name').value = name;
   document.getElementById('pip-sector').value = co.secteur || '';
   document.getElementById('pip-city').value = co.ville || '';
   document.getElementById('pip-phone').value = co.telephone || '';

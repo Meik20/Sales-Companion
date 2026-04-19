@@ -1,17 +1,12 @@
 /**
- * Firebase Configuration pour Mobile PWA (v9 modulaire)
+ * Firebase Configuration pour Mobile PWA (utilisant les globals CDN)
  */
-
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getAuth } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-import { getStorage } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
 
 try {
   console.log('[Firebase Config] Initializing...');
 
   const firebaseConfig = {
-    apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',  // Set in .env
+    apiKey: 'AIzaSyB4N62OBpJ9xYkV34VKsJrYbR6Z6_NpSPg',  // Public API key
     authDomain: 'sales-companion-237.firebaseapp.com',
     projectId: 'sales-companion-237',
     storageBucket: 'sales-companion-237.firebasestorage.app',
@@ -19,17 +14,17 @@ try {
     appId: '1:1075913757125:web:71cc06fb7f55100c5fbbac',
   };
 
-  const app = initializeApp(firebaseConfig);
+  const app = firebase.initializeApp(firebaseConfig);
   console.log('✓ Firebase app initialized');
 
-  const auth = getAuth(app);
-  const db = getFirestore(app);
-  const storage = getStorage(app);
+  const auth = firebase.auth(app);
+  const db = firebase.firestore(app);
+  const storage = firebase.storage(app);
 
   console.log('✓ Services initialized');
 
   // Persistence offline
-  enableIndexedDbPersistence(db).catch((error) => {
+  db.enablePersistence().catch((error) => {
     if (error.code === 'failed-precondition') {
       console.info('⚠️ Multiple tabs ouvertes');
     } else if (error.code === 'unimplemented') {
@@ -39,7 +34,7 @@ try {
 
   auth.languageCode = 'fr';
 
-  // Exposer globalement (optionnel)
+  // Exposer globalement
   window.auth = auth;
   window.db = db;
   window.storage = storage;

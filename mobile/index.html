@@ -48,7 +48,7 @@ body{font-family:'Outfit',sans-serif;color:var(--tx);display:flex;flex-direction
 
 /* ── CONTENT ── */
 .content{flex:1;overflow:hidden;display:flex;flex-direction:column;position:relative}
-.tab-content{display:none;flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+.tab-content{display:none;flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;will-change:scroll-position}
 .tab-content.active{display:flex;flex-direction:column}
 .tab-content::-webkit-scrollbar{display:none}
 
@@ -203,10 +203,16 @@ body{font-family:'Outfit',sans-serif;color:var(--tx);display:flex;flex-direction
 .fab.show{display:flex}
 
 /* ── PULL-TO-REFRESH ── */
-.pull-to-refresh{position:absolute;top:0;left:0;right:0;height:60px;display:flex;align-items:center;justify-content:center;z-index:10;pointer-events:none}
-.ptr-indicator{width:32px;height:32px;border-radius:50%;border:3px solid transparent;border-top-color:var(--g);border-right-color:var(--g);opacity:0.3;transform:rotate(0deg);transition:transform 0.2s ease;display:flex;align-items:center;justify-content:center}
-.ptr-indicator.refreshing{animation:spin 1s linear infinite;opacity:1;border-color:var(--g)}
-.ptr-text{font-size:12px;color:var(--tx3);margin-left:8px;opacity:0}
+.pull-to-refresh{position:absolute;top:0;left:0;right:0;height:80px;display:flex;align-items:center;justify-content:center;z-index:10;pointer-events:none;transform:translateY(-100%)}
+.pull-to-refresh.active{transform:translateY(0)}
+.ptr-container{display:flex;flex-direction:column;align-items:center;gap:8px;transform:translateY(-20px);transition:transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)}
+.ptr-container.pulling{transform:translateY(0)}
+.ptr-indicator{width:40px;height:40px;border-radius:50%;border:3px solid rgba(27,122,62,0.3);border-top-color:var(--g);border-right-color:var(--g);opacity:0;transform:rotate(0deg);transition:all 0.2s ease;display:flex;align-items:center;justify-content:center}
+.ptr-indicator.refreshing{animation:spin 1s linear infinite;opacity:1;border-color:var(--g);transform:rotate(0deg)}
+.ptr-progress{width:40px;height:4px;background:rgba(27,122,62,0.2);border-radius:2px;overflow:hidden;margin-top:4px;opacity:0;transition:opacity 0.2s ease}
+.ptr-progress.active{opacity:1}
+.ptr-progress-bar{height:100%;background:var(--g);border-radius:2px;transform-origin:left;transform:scaleX(0);transition:transform 0.1s ease}
+.ptr-text{font-size:12px;color:var(--tx3);margin-top:4px;opacity:0;transition:opacity 0.2s ease;font-weight:500}
 .ptr-text.visible{opacity:1}
 
 /* ── CHAT TAB ── */
@@ -352,8 +358,20 @@ body{font-family:'Outfit',sans-serif;color:var(--tx);display:flex;flex-direction
 <div class="content" id="content" style="display:none">
   <!-- PULL-TO-REFRESH INDICATOR -->
   <div class="pull-to-refresh" id="ptr">
-    <div class="ptr-indicator" id="ptr-indicator"></div>
-    <div class="ptr-text" id="ptr-text">Relâcher pour actualiser</div>
+    <div class="ptr-container" id="ptr-container">
+      <div class="ptr-indicator" id="ptr-indicator">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="display:none">
+          <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+          <path d="M21 3v5h-5"/>
+          <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+          <path d="M8 16H3v5"/>
+        </svg>
+      </div>
+      <div class="ptr-progress" id="ptr-progress">
+        <div class="ptr-progress-bar" id="ptr-progress-bar"></div>
+      </div>
+      <div class="ptr-text" id="ptr-text">Tirez pour actualiser</div>
+    </div>
   </div>
 
   <!-- SEARCH TAB -->
@@ -1467,75 +1485,122 @@ let ptrStartY = 0;
 let ptrCurrentY = 0;
 let ptrStartTime = 0;
 let isRefreshing = false;
+let ptrThreshold = 80;
+let ptrMaxPull = 120;
 
 function initPullToRefresh() {
   const content = document.getElementById('content');
   const ptr = document.getElementById('ptr');
+  const container = document.getElementById('ptr-container');
   const indicator = document.getElementById('ptr-indicator');
+  const progress = document.getElementById('ptr-progress');
+  const progressBar = document.getElementById('ptr-progress-bar');
   const text = document.getElementById('ptr-text');
-  
+
+  let currentTabContent = null;
+
   content.addEventListener('touchstart', (e) => {
-    const scrollEl = e.target.closest('.tab-content');
-    if (!scrollEl) return;
-    ptrEnabled = scrollEl.scrollTop === 0;
+    currentTabContent = e.target.closest('.tab-content');
+    if (!currentTabContent) return;
+
+    ptrEnabled = currentTabContent.scrollTop === 0;
     if (ptrEnabled) {
       ptrStartY = e.touches[0].clientY;
       ptrStartTime = Date.now();
-      ptr.style.transform = 'translateY(0)';
+      ptr.classList.add('active');
+      container.classList.remove('pulling');
       indicator.style.opacity = '0';
+      progress.classList.remove('active');
       text.classList.remove('visible');
+      text.textContent = 'Tirez pour actualiser';
     }
   }, { passive: true });
-  
+
   content.addEventListener('touchmove', (e) => {
-    if (!ptrEnabled || isRefreshing) return;
-    const scrollEl = e.target.closest('.tab-content');
-    if (!scrollEl || scrollEl.scrollTop > 0) return;
-    
+    if (!ptrEnabled || isRefreshing || !currentTabContent) return;
+
+    if (currentTabContent.scrollTop > 0) {
+      ptrEnabled = false;
+      return;
+    }
+
     ptrCurrentY = e.touches[0].clientY;
     const diff = ptrCurrentY - ptrStartY;
-    
+
     if (diff > 0) {
       e.preventDefault();
-      const progress = Math.min(diff / 80, 1);
-      ptr.style.transform = `translateY(${diff * 0.5}px)`;
-      indicator.style.transform = `rotate(${progress * 360}deg)`;
-      indicator.style.opacity = Math.min(progress * 1.5, 1);
-      
-      if (progress >= 1) {
+
+      // Elastic damping effect (like Facebook)
+      const dampedDiff = diff * (1 - Math.pow(diff / ptrMaxPull, 2) * 0.3);
+      const progressRatio = Math.min(dampedDiff / ptrThreshold, 1);
+
+      // Smooth container animation
+      container.style.transform = `translateY(${Math.min(dampedDiff * 0.6, 40)}px)`;
+
+      // Progress indicator
+      if (progressRatio >= 0.3) {
+        progress.classList.add('active');
+        progressBar.style.transform = `scaleX(${progressRatio})`;
+      }
+
+      // Indicator opacity and rotation
+      const indicatorOpacity = Math.min(progressRatio * 2, 1);
+      indicator.style.opacity = indicatorOpacity;
+      indicator.style.transform = `rotate(${progressRatio * 360}deg)`;
+
+      // Text feedback
+      if (progressRatio >= 1) {
         text.classList.add('visible');
+        text.textContent = 'Relâchez pour actualiser';
+        container.classList.add('pulling');
       } else {
         text.classList.remove('visible');
+        container.classList.remove('pulling');
       }
     }
   }, { passive: false });
-  
+
   content.addEventListener('touchend', (e) => {
     if (!ptrEnabled || isRefreshing) return;
+
     const diff = ptrCurrentY - ptrStartY;
-    const shouldRefresh = diff > 80;
-    
+    const shouldRefresh = diff > ptrThreshold;
+
     if (shouldRefresh) {
       performRefresh();
     } else {
-      ptr.style.transform = 'translateY(0)';
+      // Elastic snap back animation
+      ptr.classList.remove('active');
+      container.style.transform = 'translateY(-20px)';
       indicator.style.opacity = '0';
-      indicator.style.transform = 'rotate(0deg)';
+      progress.classList.remove('active');
       text.classList.remove('visible');
+
+      setTimeout(() => {
+        ptr.classList.remove('active');
+      }, 300);
     }
+
     ptrEnabled = false;
   }, { passive: true });
 }
 
 async function performRefresh() {
   isRefreshing = true;
+  const container = document.getElementById('ptr-container');
   const indicator = document.getElementById('ptr-indicator');
+  const progress = document.getElementById('ptr-progress');
+  const progressBar = document.getElementById('ptr-progress-bar');
   const text = document.getElementById('ptr-text');
   const ptr = document.getElementById('ptr');
-  
+
+  // Start refresh animation
+  container.classList.add('pulling');
   indicator.classList.add('refreshing');
+  progress.classList.remove('active');
   text.textContent = 'Actualisation...';
-  
+  text.classList.add('visible');
+
   // Actualiser les données selon l'onglet actif
   try {
     const activeTab = document.querySelector('.tab-content.active');
@@ -1554,25 +1619,46 @@ async function performRefresh() {
       // Actualiser les recherches sauvegardées
       await loadSaved();
     }
-    
+
+    // Success feedback
     text.textContent = 'Actualisé ✓';
+    text.style.color = 'var(--g)';
+
     setTimeout(() => {
-      ptr.style.transform = 'translateY(0)';
+      // Smooth hide animation
+      ptr.classList.remove('active');
+      container.classList.remove('pulling');
+      container.style.transform = 'translateY(-20px)';
       indicator.classList.remove('refreshing');
       indicator.style.opacity = '0';
-      indicator.style.transform = 'rotate(0deg)';
       text.classList.remove('visible');
-      isRefreshing = false;
-    }, 500);
+      text.style.color = 'var(--tx3)';
+
+      setTimeout(() => {
+        ptr.classList.remove('active');
+        isRefreshing = false;
+      }, 300);
+    }, 800);
+
   } catch (err) {
+    // Error feedback
     text.textContent = 'Erreur d\'actualisation';
+    text.style.color = 'var(--red)';
     console.error('Refresh error:', err);
+
     setTimeout(() => {
-      ptr.style.transform = 'translateY(0)';
+      ptr.classList.remove('active');
+      container.classList.remove('pulling');
+      container.style.transform = 'translateY(-20px)';
       indicator.classList.remove('refreshing');
       indicator.style.opacity = '0';
       text.classList.remove('visible');
-      isRefreshing = false;
+      text.style.color = 'var(--tx3)';
+
+      setTimeout(() => {
+        ptr.classList.remove('active');
+        isRefreshing = false;
+      }, 300);
     }, 1500);
   }
 }

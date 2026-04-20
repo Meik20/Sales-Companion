@@ -488,16 +488,6 @@ const menuTemplate = [
       },
     ],
   },
-  {
-    label: 'Aide',
-    submenu: [
-      {
-        label: 'Outils développeur',
-        accelerator: 'F12',
-        click: () => mainWindow.webContents.openDevTools(),
-      },
-    ],
-  },
 ];
 
 /* ─────────────────────────────────────────────

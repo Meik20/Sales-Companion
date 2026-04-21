@@ -1,4 +1,4 @@
-// Service Worker - Cache & Offline Support (CORRIGÉ)
+// Service Worker - Cache & Offline Support (FIXED)
 const CACHE_NAME = 'sales-companion-v2';
 
 const STATIC_ASSETS = [
@@ -14,10 +14,8 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       console.log('[SW] Caching static assets');
-
       return cache.addAll(STATIC_ASSETS).catch((err) => {
-        console.warn('[SW] Some assets failed to cache:', err);
-        return Promise.resolve(); // ne casse pas l'installation
+        console.warn('[SW] Cache failed:', err);
       });
     })
   );
@@ -30,12 +28,12 @@ self.addEventListener('activate', (event) => {
   console.log('[SW] Activating...');
 
   event.waitUntil(
-    caches.keys().then((cacheNames) =>
+    caches.keys().then((names) =>
       Promise.all(
-        cacheNames.map((cache) => {
-          if (cache !== CACHE_NAME) {
-            console.log('[SW] Deleting old cache:', cache);
-            return caches.delete(cache);
+        names.map((name) => {
+          if (name !== CACHE_NAME) {
+            console.log('[SW] Deleting old cache:', name);
+            return caches.delete(name);
           }
         })
       )
@@ -54,79 +52,88 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(req.url);
 
-  // ================= EXTERNAL REQUESTS =================
-  // (Google Fonts, Firebase CDN, etc.)
+  // ❌ Ignore Google Fonts (évite CSP + bugs)
+  if (
+    url.origin.includes('fonts.googleapis.com') ||
+    url.origin.includes('fonts.gstatic.com')
+  ) {
+    return;
+  }
+
+  // ================= ROUTER =================
   if (url.origin !== self.location.origin) {
-    event.respondWith(
-      fetch(req).catch((err) => {
-        console.warn('[SW] External fetch failed:', req.url, err);
-
-        // Toujours retourner une réponse valide
-        return new Response('', { status: 204 });
-      })
-    );
-    return;
+    return handleExternal(event);
   }
 
-  // ================= API REQUESTS =================
-  const isApi = url.pathname.startsWith('/api/');
-
-  if (isApi) {
-    event.respondWith(
-      fetch(req)
-        .then((res) => {
-          if (res && res.status === 200) {
-            const clone = res.clone();
-
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(req, clone);
-            });
-          }
-
-          return res;
-        })
-        .catch(() => {
-          return caches.match(req).then((cached) => {
-            if (cached) return cached;
-
-            console.warn('[SW] API offline:', req.url);
-
-            return new Response(
-              JSON.stringify({ error: 'Offline', message: 'Service unavailable' }),
-              {
-                status: 503,
-                headers: { 'Content-Type': 'application/json' },
-              }
-            );
-          });
-        })
-    );
-
-    return;
+  if (url.pathname.startsWith('/api/')) {
+    return handleAPI(event);
   }
 
-  // ================= STATIC FILES =================
+  return handleStatic(event);
+});
+
+// ================= HANDLERS =================
+
+// 🌍 Requêtes externes (CDN, Firebase, etc.)
+function handleExternal(event) {
   event.respondWith(
-    caches.match(req).then((cached) => {
+    fetch(event.request).catch((err) => {
+      console.warn('[SW] External failed:', event.request.url);
+      return new Response('', { status: 204 });
+    })
+  );
+}
+
+// 🔗 API → Network First
+function handleAPI(event) {
+  event.respondWith(
+    fetch(event.request)
+      .then((res) => {
+        if (res && res.status === 200) {
+          const clone = res.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, clone);
+          });
+        }
+        return res;
+      })
+      .catch(() =>
+        caches.match(event.request).then((cached) => {
+          if (cached) return cached;
+
+          return new Response(
+            JSON.stringify({
+              error: 'Offline',
+              message: 'Service unavailable',
+            }),
+            {
+              status: 503,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          );
+        })
+      )
+  );
+}
+
+// 📦 Static → Cache First
+function handleStatic(event) {
+  event.respondWith(
+    caches.match(event.request).then((cached) => {
       if (cached) return cached;
 
-      return fetch(req)
+      return fetch(event.request)
         .then((res) => {
-          if (!res || res.status !== 200 || res.type === 'error') {
-            return res;
-          }
+          if (!res || res.status !== 200) return res;
 
           const clone = res.clone();
-
           caches.open(CACHE_NAME).then((cache) => {
-            cache.put(req, clone);
+            cache.put(event.request, clone);
           });
 
           return res;
         })
         .catch(() => {
-          console.warn('[SW] Offline static fallback:', req.url);
-
           return new Response('Offline', {
             status: 503,
             headers: { 'Content-Type': 'text/plain' },
@@ -134,4 +141,4 @@ self.addEventListener('fetch', (event) => {
         });
     })
   );
-});
+}

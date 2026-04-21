@@ -58,12 +58,40 @@ app.use(
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'", "https://www.gstatic.com", "https://apis.google.com"],
-        scriptSrcElem: ["'self'", "'unsafe-inline'", "https://www.gstatic.com", "https://apis.google.com"],
+
+        scriptSrc: [
+          "'self'",
+          "'unsafe-inline'",
+          "https://www.gstatic.com",
+          "https://apis.google.com"
+        ],
+
+        scriptSrcElem: [
+          "'self'",
+          "'unsafe-inline'",
+          "https://www.gstatic.com",
+          "https://apis.google.com"
+        ],
+
         scriptSrcAttr: ["'unsafe-inline'"],
-        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-        fontSrc: ["'self'", "https://fonts.gstatic.com"],
-        imgSrc: ["'self'", "data:", "https:"],
+
+        styleSrc: [
+          "'self'",
+          "'unsafe-inline'",
+          "https://fonts.googleapis.com"
+        ],
+
+        fontSrc: [
+          "'self'",
+          "https://fonts.gstatic.com"
+        ],
+
+        imgSrc: [
+          "'self'",
+          "data:",
+          "https:"
+        ],
+
         connectSrc: [
           "'self'",
           "https://*.firebaseapp.com",
@@ -71,7 +99,9 @@ app.use(
           "https://*.google.com",
           "https://identitytoolkit.googleapis.com",
           "https://www.gstatic.com",
+          "https://fonts.gstatic.com" // ✅ AJOUT IMPORTANT
         ],
+
         frameSrc: ["https://*.firebaseapp.com"],
       },
     },

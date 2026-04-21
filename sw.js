@@ -1,120 +1,137 @@
-// Service Worker - Cache & Offline Support
-const CACHE_NAME = 'sales-companion-v1';
+// Service Worker - Cache & Offline Support (CORRIGÉ)
+const CACHE_NAME = 'sales-companion-v2';
+
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
 ];
 
+// ================= INSTALL =================
 self.addEventListener('install', (event) => {
   console.log('[SW] Installing...');
+
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       console.log('[SW] Caching static assets');
+
       return cache.addAll(STATIC_ASSETS).catch((err) => {
-        console.log('[SW] Some assets could not be cached:', err);
-        // Don't fail install if some assets fail
-        return Promise.resolve();
+        console.warn('[SW] Some assets failed to cache:', err);
+        return Promise.resolve(); // ne casse pas l'installation
       });
     })
   );
+
   self.skipWaiting();
 });
 
+// ================= ACTIVATE =================
 self.addEventListener('activate', (event) => {
   console.log('[SW] Activating...');
+
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames
-          .filter((cacheName) => cacheName !== CACHE_NAME)
-          .map((cacheName) => {
-            console.log('[SW] Deleting old cache:', cacheName);
-            return caches.delete(cacheName);
-          })
-      );
-    })
+    caches.keys().then((cacheNames) =>
+      Promise.all(
+        cacheNames.map((cache) => {
+          if (cache !== CACHE_NAME) {
+            console.log('[SW] Deleting old cache:', cache);
+            return caches.delete(cache);
+          }
+        })
+      )
+    )
   );
+
   self.clients.claim();
 });
 
+// ================= FETCH =================
 self.addEventListener('fetch', (event) => {
-  // Skip non-GET requests - let them fail naturally
-  if (event.request.method !== 'GET') {
-    return;
-  }
+  const req = event.request;
 
-  // Skip cross-origin requests
-  if (!event.request.url.startsWith(self.location.origin)) {
-    return;
-  }
+  // ❌ Ignore non-GET
+  if (req.method !== 'GET') return;
 
-  // Enhanced fetch strategy: cache-first for static, network-first for API
-  const isApiRequest = event.request.url.includes('/api/');
+  const url = new URL(req.url);
 
-  if (isApiRequest) {
-    // Network-first for API requests
+  // ================= EXTERNAL REQUESTS =================
+  // (Google Fonts, Firebase CDN, etc.)
+  if (url.origin !== self.location.origin) {
     event.respondWith(
-      fetch(event.request)
-        .then((response) => {
-          // Cache successful responses
-          if (response && response.status === 200) {
-            const responseToCache = response.clone();
+      fetch(req).catch((err) => {
+        console.warn('[SW] External fetch failed:', req.url, err);
+
+        // Toujours retourner une réponse valide
+        return new Response('', { status: 204 });
+      })
+    );
+    return;
+  }
+
+  // ================= API REQUESTS =================
+  const isApi = url.pathname.startsWith('/api/');
+
+  if (isApi) {
+    event.respondWith(
+      fetch(req)
+        .then((res) => {
+          if (res && res.status === 200) {
+            const clone = res.clone();
+
             caches.open(CACHE_NAME).then((cache) => {
-              cache.put(event.request, responseToCache);
+              cache.put(req, clone);
             });
           }
-          return response;
+
+          return res;
         })
         .catch(() => {
-          // Try to return cached response, otherwise 503 Offline
-          return caches.match(event.request).then((cached) => {
+          return caches.match(req).then((cached) => {
             if (cached) return cached;
-            console.log('[SW] Offline - no cached API response:', event.request.url);
-            return new Response('Offline - Service unavailable', { 
-              status: 503, 
-              statusText: 'Service Unavailable',
-              headers: new Headers({ 'Content-Type': 'text/plain' })
-            });
+
+            console.warn('[SW] API offline:', req.url);
+
+            return new Response(
+              JSON.stringify({ error: 'Offline', message: 'Service unavailable' }),
+              {
+                status: 503,
+                headers: { 'Content-Type': 'application/json' },
+              }
+            );
           });
         })
     );
-  } else {
-    // Cache-first for static assets
-    event.respondWith(
-      caches
-        .match(event.request)
-        .then((response) => {
-          // Return cached response if found
-          if (response) {
-            return response;
+
+    return;
+  }
+
+  // ================= STATIC FILES =================
+  event.respondWith(
+    caches.match(req).then((cached) => {
+      if (cached) return cached;
+
+      return fetch(req)
+        .then((res) => {
+          if (!res || res.status !== 200 || res.type === 'error') {
+            return res;
           }
 
-          // Try to fetch from network
-          return fetch(event.request).then((response) => {
-            // Don't cache non-successful responses
-            if (!response || response.status !== 200 || response.type === 'error') {
-              return response;
-            }
+          const clone = res.clone();
 
-            // Cache successful responses
-            const responseToCache = response.clone();
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(event.request, responseToCache);
-            });
-
-            return response;
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(req, clone);
           });
+
+          return res;
         })
         .catch(() => {
-          // Return offline response
-          console.log('[SW] Offline - no cached response:', event.request.url);
-          return new Response('Offline', { 
-            status: 503, 
-            statusText: 'Service Unavailable',
-            headers: new Headers({ 'Content-Type': 'text/plain' })
+          console.warn('[SW] Offline static fallback:', req.url);
+
+          return new Response('Offline', {
+            status: 503,
+            headers: { 'Content-Type': 'text/plain' },
           });
-        })
-    );
-  }
+        });
+    })
+  );
 });

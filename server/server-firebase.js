@@ -489,6 +489,21 @@ app.post('/admin/import', verifyAdmin, upload.single('file'), async (req, res) =
 
     const result = await importCompaniesBatch(companies);
     cleanup();
+    // Enregistrer un journal d'import pour l'historique admin
+    try {
+      const { getFirestore } = require('firebase-admin/firestore');
+      const adminDb = getFirestore();
+      await adminDb.collection('import_logs').add({
+        filename: req.file.originalname || 'upload',
+        total: data.length,
+        imported: result.importedCount  || 0,
+        updated:  result.updatedCount   || 0,
+        skipped:  result.skippedCount   || 0,
+        errors:   result.errorCount     || 0,
+        createdAt: new Date().toISOString(),
+        sourceFile: req.file.originalname || '',
+      });
+    } catch (e) { console.warn('[IMPORT] Failed to write import log:', e.message); }
 
     res.json({
       total:    data.length,
@@ -557,10 +572,17 @@ app.delete('/admin/companies/all', verifyAdmin, async (req, res) => {
     const { getFirestore } = require('firebase-admin/firestore');
     const adminDb = getFirestore();
     const snap = await adminDb.collection('companies').get();
-    const batch = adminDb.batch();
-    snap.docs.forEach((doc) => batch.delete(doc.ref));
-    await batch.commit();
-    res.json({ success: true, deleted: snap.size });
+    const docs = snap.docs;
+    const BATCH_SIZE = 400; // batch safe size
+    let deleted = 0;
+    for (let i = 0; i < docs.length; i += BATCH_SIZE) {
+      const batch = adminDb.batch();
+      const chunk = docs.slice(i, i + BATCH_SIZE);
+      chunk.forEach(doc => batch.delete(doc.ref));
+      await batch.commit();
+      deleted += chunk.length;
+    }
+    res.json({ success: true, deleted });
   } catch (error) {
     return safeError(res, 500, 'Erreur suppression totale', error);
   }

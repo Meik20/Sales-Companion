@@ -342,11 +342,18 @@ async function getConfig(key) {
  
 async function logUsage(userId, query, resultsCount = 0) {
   try {
+    // Enrichir le log avec le nom et le plan si disponible, et utiliser
+    // le champ `createdAt` attendu par le panel admin.
+    const userDoc = await db.collection('users').doc(userId).get();
+    const userData = userDoc.exists ? userDoc.data() : {};
     await db.collection('usage_logs').add({
       userId,
-      query:        query        ?? '',
-      resultsCount: resultsCount ?? 0,
-      timestamp:    new Date().toISOString(),
+      name: userData.name || '',
+      email: userData.email || '',
+      plan: userData.plan || 'free',
+      query: query ?? '',
+      results_count: resultsCount ?? 0,
+      createdAt: new Date().toISOString(),
     });
   } catch (error) {
     console.error('Error logging usage:', error.message);
@@ -401,20 +408,30 @@ async function consumeCredit(userId) {
  
 async function createSupportMessage(userId, data) {
   try {
-    const user = await getUser(userId);
-    if (!user) return null;
- 
+    // Essayer de récupérer le profil Firestore; si absent, utiliser
+    // le profil Firebase Auth comme secours afin de toujours créer
+    // le message même si l'utilisateur n'a pas de document users.
+    let user = await getUser(userId).catch(() => null);
+    if (!user) {
+      try {
+        const authUser = await auth.getUser(userId);
+        user = { name: authUser.displayName || 'Utilisateur', email: authUser.email || '' };
+      } catch (_) {
+        user = { name: 'Utilisateur', email: '' };
+      }
+    }
+
     const message = {
       userId,
       userName: user.name || 'Utilisateur',
-      userEmail: user.email,
+      userEmail: user.email || '',
       subject: data.subject || 'Support',
       message: data.message || '',
       status: 'open',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
- 
+
     const docRef = await db.collection('support_messages').add(message);
     return { id: docRef.id, ...message };
   } catch (error) {

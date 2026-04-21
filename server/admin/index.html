@@ -533,14 +533,22 @@ function logout() {
 function showApp() {
   document.getElementById('auth-page').style.display = 'none';
   document.getElementById('app').style.display = 'block';
-  loadDashboard();
+  // Restore last opened page if present, otherwise show dashboard
+  const last = sessionStorage.getItem('admin_last_page') || 'dashboard';
+  showPage(last);
 }
 
 function showPage(name, el) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById(`page-${name}`).classList.add('active');
-  el.classList.add('active');
+  if (el && el.classList) el.classList.add('active');
+  else {
+    // Try to find the nav item that triggers this page
+    const nav = Array.from(document.querySelectorAll('.nav-item')).find(n => (n.getAttribute('onclick')||'').includes(`showPage('${name}'`));
+    if (nav) nav.classList.add('active');
+  }
+  sessionStorage.setItem('admin_last_page', name);
   if (name === 'users')     loadUsers();
   if (name === 'logs')      loadLogs();
   if (name === 'config')    loadConfig();
@@ -574,14 +582,6 @@ async function loadDashboard() {
           ae.textContent = '❌ Manquante'; ae.style.color = 'var(--red)';
           document.getElementById('s-api-sub').textContent = 'Chat IA inactif';
         }
-      }
-      const ae  = document.getElementById('s-api');
-      if (cfg.groq_api_key) {
-        ae.textContent = '✅ OK'; ae.style.color = 'var(--g)';
-        document.getElementById('s-api-sub').textContent = 'Chat IA actif';
-      } else {
-        ae.textContent = '❌ Manquante'; ae.style.color = 'var(--red)';
-        document.getElementById('s-api-sub').textContent = 'Chat IA inactif';
       }
     } catch(_) {}
 

@@ -23,6 +23,67 @@
   --sh:0 2px 8px rgba(0,0,0,0.07);--sh2:0 4px 20px rgba(0,0,0,0.11);
   --blue:#1a73e8;--bl:#e8f0fe;--red:#e74c3c;--rl:#fdf0ef;--gold:#f39c12;--gdl:#fef9ec;
 }
+
+function toggleSelectForAssign(idx){
+  const co = lastResults[idx]; if(!co) return;
+  const key = co.id || co.niu || co.siren || idx;
+  const btn = document.getElementById('sel-btn-' + idx);
+  if(selectedForAssign.has(key)){
+    selectedForAssign.delete(key);
+    if(btn) { btn.style.background='transparent'; btn.style.border='1px dashed var(--bd2)'; btn.textContent='Sélectionner'; }
+  } else {
+    selectedForAssign.add(key);
+    if(btn) { btn.style.background='var(--g)'; btn.style.color='#fff'; btn.style.border='1px solid rgba(0,0,0,0.05)'; btn.textContent='Sélectionné'; }
+  }
+  document.getElementById('assign-count').textContent = selectedForAssign.size;
+}
+
+function openManagerAssignModal(){
+  document.getElementById('assign-count').textContent = selectedForAssign.size;
+  loadTeamMembersDesktop();
+  document.getElementById('assign-modal').classList.add('open');
+}
+
+function closeAssignModal(){
+  document.getElementById('assign-modal').classList.remove('open');
+}
+
+async function submitAssignmentDesktop(){
+  const assignee = document.getElementById('assign-assignee-select').value;
+  const note = document.getElementById('assign-note').value.trim();
+  if(!assignee) return toast('Saisissez l\'UID ou l\'email du commercial');
+  if(selectedForAssign.size===0) return toast('Aucune fiche sélectionnée');
+  const prospectIds = Array.from(selectedForAssign);
+  try{
+    const r = await fetch(RAILWAY_SERVER + '/api/assignments', { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+token}, body: JSON.stringify({ assigneeId: assignee, prospectIds, note }) });
+    const res = await r.json().catch(()=>({}));
+    if(!r.ok) {
+      if (r.status === 403) {
+        const msg = res.error || 'Accès refusé — la personne n\'appartient pas à votre équipe.';
+        return toast(msg + ' Invitez le commercial dans votre équipe ou contactez votre administrateur.');
+      }
+      if (r.status === 404) return toast('Utilisateur introuvable — vérifiez l\'email ou invitez le commercial.');
+      return toast('Erreur: '+(res.error||'')); }
+    toast('✅ Assignation créée');
+    selectedForAssign.clear();
+    // reset buttons visuals
+    document.querySelectorAll('[id^="sel-btn-"]').forEach(b=>{ b.style.background='transparent'; b.style.color=''; b.textContent='Sélectionner'; b.style.border='1px dashed var(--bd2)'; });
+    closeAssignModal();
+  }catch(e){ toast('Erreur: '+e.message); }
+}
+
+async function loadTeamMembersDesktop(){
+  const sel = document.getElementById('assign-assignee-select');
+  sel.innerHTML = '<option value="">Chargement…</option>';
+  try{
+    const r = await fetch(RAILWAY_SERVER + '/api/team', { headers: { 'Authorization': 'Bearer ' + token } });
+    if(!r.ok){ sel.innerHTML = '<option value="">Aucun membre</option>'; return; }
+    const d = await r.json();
+    const list = d.data || [];
+    if(!list.length){ sel.innerHTML = '<option value="">Aucun membre</option>'; return; }
+    sel.innerHTML = list.map(u=>`<option value="${u.uid}">${(u.name||u.email||u.uid)} ${u.email?`<${u.email}>`:''}</option>`).join('');
+  }catch(e){ sel.innerHTML = '<option value="">Erreur</option>'; }
+}
 body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--tx);height:100vh;overflow:hidden;display:flex;flex-direction:column}
 
 /* AUTH */
@@ -335,6 +396,13 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--tx);height
     <div id="register-form" style="display:none">
       <div class="fg"><label>Nom complet</label><input type="text" id="r-name" placeholder="Jean Dupont"></div>
       <div class="fg"><label>Email</label><input type="email" id="r-email" placeholder="vous@exemple.com"></div>
+      <div class="fg"><label>Type de compte</label>
+        <select id="r-account-type" class="fsel" onchange="onRegisterAccountTypeChange()">
+          <option value="independent">Commercial indépendant</option>
+          <option value="manager">Compte entreprise — Manager</option>
+        </select>
+      </div>
+      <div class="fg" id="r-company-row" style="display:none"><label>ID Société (optionnel)</label><input type="text" id="r-company" placeholder="company_id (pour comptes entreprise)"></div>
       <div class="fg"><label>Mot de passe</label><input type="password" id="r-pass" placeholder="Minimum 6 caractères" onkeydown="if(event.key==='Enter')doRegister()"></div>
       <div class="a-err" id="r-err"></div>
       <button class="a-btn" id="r-btn" onclick="doRegister()">Créer mon compte →</button>
@@ -353,6 +421,7 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--tx);height
       <span id="tb-status-name" style="font-weight:500">—</span>
       <span class="plan-b" id="tb-status-plan" style="background:#e0e0e0;color:#555">free</span>
     </div>
+    <button id="manager-assign-btn" class="ct-btn" style="margin-left:8px;padding:6px 10px;font-size:12px;display:none" onclick="openManagerAssignModal()">🗂️ Créer assignation</button>
   </div>
 </div>
 
@@ -553,6 +622,25 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--tx);height
   </div>
 </div>
 
+<!-- MANAGER ASSIGNMENT MODAL -->
+<div class="overlay" id="assign-modal" onclick="if(event.target===this)this.classList.remove('open')">
+  <div class="save-modal" onclick="event.stopPropagation()" style="width:420px">
+    <h3>🗂️ Créer une assignation</h3>
+    <div style="font-size:13px;color:var(--tx3);margin-bottom:8px">Prospects sélectionnés: <span id="assign-count">0</span></div>
+    <label style="font-size:11px;font-weight:700;color:var(--tx3)">Assignee</label>
+    <select id="assign-assignee-select" style="width:100%;padding:9px;border:1px solid var(--bd);border-radius:8px">
+      <option value="">Chargement…</option>
+    </select>
+    <label style="font-size:11px;font-weight:700;color:var(--tx3)">Note (optionnel)</label>
+    <input type="text" id="assign-note" placeholder="Contexte, priorités...">
+    <div class="mbtns" style="margin-top:12px">
+      <button class="btn-cancel" onclick="closeAssignModal()">Annuler</button>
+      <button class="btn-ok" onclick="submitAssignmentDesktop()">Créer assignation</button>
+    </div>
+    <div style="font-size:12px;color:var(--tx3);margin-top:8px">Sélectionnez des fiches dans les résultats puis cliquez sur <strong>Créer assignation</strong>.</div>
+  </div>
+</div>
+
 <!-- EDIT NOTE MODAL -->
 <div class="overlay" id="note-overlay" onclick="if(event.target===this)this.classList.remove('open')">
   <div class="note-modal" onclick="event.stopPropagation()">
@@ -593,6 +681,7 @@ const REGION_CITIES={
 };
 
 let token='',user=null,chatHistory=[],isSearching=false,isChatting=false,isInitializing=true;
+let selectedForAssign = new Set();
 
 // Initialize app with cached token (prevent auth screen flash)
 async function initializeApp(){
@@ -722,7 +811,9 @@ async function doRegister(){
     }
     
     console.log('[doRegister] Registering:', email);
-    const res = await window.electronAPI.register({name, email, password, serverUrl: RAILWAY_SERVER});
+    const accountType = document.getElementById('r-account-type').value;
+    const companyId = document.getElementById('r-company').value.trim();
+    const res = await window.electronAPI.register({name, email, password, role: accountType==='manager'?'manager':'independent', company_id: companyId||null, serverUrl: RAILWAY_SERVER});
     
     if (res.status !== 200 && res.status !== 201) {
       throw new Error(res.data?.error || 'Erreur lors de l\'inscription');
@@ -764,10 +855,21 @@ function showApp(){
     pb.textContent=user.plan?.toUpperCase()||'FREE';pb.className=`plan-b ${pmap[user.plan]||'pf'}`;
     const isPro=['pro','enterprise'].includes(user.plan);
     document.getElementById('add-city-btn').style.display=isPro?'block':'none';
+    // Show manager assignment controls only for managers
+    try{
+      const mbtn = document.getElementById('manager-assign-btn');
+      if(mbtn) mbtn.style.display = (user.role === 'manager') ? 'inline-flex' : 'none';
+    }catch(e){}
     refreshRemaining();
     loadSavedSearches();
     loadPipeline();
   }
+}
+function onRegisterAccountTypeChange(){
+  try{
+    const v=document.getElementById('r-account-type').value;
+    document.getElementById('r-company-row').style.display = v==='manager' ? 'block' : 'none';
+  }catch(e){}
 }
 async function refreshRemaining(){
   try{
@@ -979,6 +1081,7 @@ function renderResults(data){
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
           Partager
         </button>
+            ${user && user.role==='manager'?`<button class="ca" id="sel-btn-${i}" onclick="toggleSelectForAssign(${i})" style="border:1px dashed var(--bd2);background:transparent">Sélectionner</button>`:''}
       </div>
       <div class="map-panel" id="map-${id}">
         <button class="map-close" onclick="toggleMap('${id}','')">✕ Fermer la carte</button>

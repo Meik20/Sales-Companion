@@ -18,6 +18,8 @@ async function createUser(email, password, userData = {}) {
       uid: userRecord.uid,
       email,
       name: userData.name || '',
+      role: userData.role || 'independent',
+      company_id: userData.company_id || userData.company || null,
       plan: userData.plan || 'free',
       dailyLimit: 10,
       dailyUsed: 0,
@@ -182,6 +184,37 @@ async function searchCompanies(filters = {}) {
         const employees = normalizeInt(c.employees || c.employee_count || c.effectif || c.nb_employes || c.taille || c.taille_effectif || c.staff_count);
         return typeof employees === 'number' && employees >= employeeThreshold;
       });
+    }
+
+    // ── GEO-RADIUS FILTER (around_me) ─────────────────────────
+    // filters.around_me = { lat, lon, radius } where radius is in km
+    if (filters.around_me && filters.around_me.lat && filters.around_me.lon) {
+      const toNum = (v) => (v === undefined || v === null ? null : Number(v));
+      const originLat = toNum(filters.around_me.lat);
+      const originLon = toNum(filters.around_me.lon);
+      const radiusKm = toNum(filters.around_me.radius) || 10;
+
+      // Haversine distance
+      const haversineKm = (lat1, lon1, lat2, lon2) => {
+        const toRad = (deg) => deg * Math.PI / 180;
+        const R = 6371; // Earth radius km
+        const dLat = toRad(lat2 - lat1);
+        const dLon = toRad(lon2 - lon1);
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2) * Math.sin(dLon/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        return R * c;
+      };
+
+      companies = companies.map(c => {
+        const lat = toNum(c.latitude || c.lat || (c.location && c.location.latitude) || (c.geo && c.geo.lat));
+        const lon = toNum(c.longitude || c.lon || c.lng || (c.location && c.location.longitude) || (c.geo && c.geo.lon));
+        if (lat !== null && lon !== null && !Number.isNaN(lat) && !Number.isNaN(lon)) {
+          const distance = haversineKm(originLat, originLon, lat, lon);
+          return { ...c, _distance_km: Math.round(distance * 100) / 100, _hasLocation: true };
+        }
+        return { ...c, _distance_km: null, _hasLocation: false };
+      }).filter(c => c._hasLocation && c._distance_km !== null && c._distance_km <= radiusKm)
+        .sort((a,b) => (a._distance_km || 999999) - (b._distance_km || 999999));
     }
 
     companies = companies.map(c => ({
@@ -381,6 +414,117 @@ async function checkCompanyInPipeline(userId, companyId, companyName) {
   } catch (error) {
     console.error('Error checking company in pipeline:', error);
     return null;
+  }
+}
+
+// ── ASSIGNMENTS / TEAM MANAGEMENT ─────────────────────────────────
+async function addAssignments(assignerId, assigneeId, prospectIds = [], note = '') {
+  try {
+    if (!assigneeId || !Array.isArray(prospectIds) || prospectIds.length === 0) throw new Error('Invalid parameters');
+    const batch = db.batch();
+    const created = [];
+    for (const pid of prospectIds) {
+      const ref = db.collection('assignments').doc();
+      const doc = {
+        id: ref.id,
+        company_id: pid,
+        assigned_to: assigneeId,
+        assigned_by: assignerId,
+        note: note || '',
+        status: 'assigned',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      batch.set(ref, doc);
+      created.push(doc);
+    }
+    await batch.commit();
+    return created;
+  } catch (error) {
+    console.error('Error creating assignments:', error.message || error);
+    throw error;
+  }
+}
+
+async function getAssignmentsForUser(userId, limit = 200) {
+  try {
+    const snapshot = await db.collection('assignments')
+      .where('assigned_to', '==', userId)
+      .orderBy('createdAt', 'desc')
+      .limit(parseInt(limit, 10) || 200)
+      .get();
+    return snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch (error) {
+    console.error('Error getting assignments for user:', error.message || error);
+    throw error;
+  }
+}
+
+async function getAssignmentsCreatedBy(userId, limit = 200) {
+  try {
+    const snapshot = await db.collection('assignments')
+      .where('assigned_by', '==', userId)
+      .orderBy('createdAt', 'desc')
+      .limit(parseInt(limit, 10) || 200)
+      .get();
+    return snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch (error) {
+    console.error('Error getting assignments created by user:', error.message || error);
+    throw error;
+  }
+}
+
+async function updateAssignment(assignmentId, updateData = {}) {
+  try {
+    const ref = db.collection('assignments').doc(assignmentId);
+    await ref.update({ ...updateData, updatedAt: new Date().toISOString() });
+    const doc = await ref.get();
+    return { id: doc.id, ...doc.data() };
+  } catch (error) {
+    console.error('Error updating assignment:', error.message || error);
+    throw error;
+  }
+}
+
+// ── TEAM / USERS HELPERS ───────────────────────────────────────
+async function getTeamMembers(managerId, limit = 200) {
+  try {
+    const candidates = [];
+    const mgrDoc = await db.collection('users').doc(managerId).get();
+    if (mgrDoc.exists) {
+      const mgr = mgrDoc.data();
+      // If manager document has a company link, return users with same company_id
+      const companyId = mgr.company_id || mgr.companyId || mgr.company || null;
+      if (companyId) {
+        const snap = await db.collection('users').where('company_id', '==', companyId).get();
+        candidates.push(...snap.docs.map(d => ({ uid: d.id, ...d.data() })));
+      }
+      // Try direct manager pointer fields
+      const byManager = await db.collection('users').where('managerId', '==', managerId).get();
+      candidates.push(...byManager.docs.map(d => ({ uid: d.id, ...d.data() })));
+      const byManager2 = await db.collection('users').where('manager', '==', managerId).get().catch(()=>({docs:[]}));
+      candidates.push(...byManager2.docs.map(d => ({ uid: d.id, ...d.data() })));
+      // If manager has 'team' array of uids
+      if (Array.isArray(mgr.team) && mgr.team.length) {
+        for (const memberId of mgr.team.slice(0, limit)) {
+          const mDoc = await db.collection('users').doc(memberId).get().catch(()=>null);
+          if (mDoc && mDoc.exists) candidates.push({ uid: mDoc.id, ...mDoc.data() });
+        }
+      }
+    }
+
+    // Deduplicate by uid
+    const map = new Map();
+    for (const u of candidates) {
+      if (!u || !u.uid) continue;
+      if (!map.has(u.uid)) map.set(u.uid, { uid: u.uid, name: u.name || u.displayName || u.email || u.uid, email: u.email || '' });
+    }
+
+    const out = Array.from(map.values()).slice(0, limit);
+    return out;
+  } catch (error) {
+    console.error('Error getting team members:', error.message || error);
+    throw error;
   }
 }
  
@@ -637,6 +781,10 @@ module.exports = {
   addSavedSearch, getSavedSearches, deleteSavedSearch,
   logUsage, consumeCredit,
   createSupportMessage, getSupportMessages, getSupportMessagesForUser, replyToSupportMessage, closeSupportMessage,
+  // Assignments / team
+  addAssignments, getAssignmentsForUser, getAssignmentsCreatedBy, updateAssignment,
+  getTeamMembers,
   verifyToken, verifyAdmin,
 };
+
  

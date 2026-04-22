@@ -22,6 +22,7 @@ const {
   createUser,
   getUser,
   updateUserPlan,
+  getTeamMembers,
   searchCompanies,
   importCompaniesBatch,
   addSavedSearch,
@@ -34,6 +35,10 @@ const {
   getConfig,
   setConfig,
   logUsage,
+  addAssignments,
+  getAssignmentsForUser,
+  getAssignmentsCreatedBy,
+  updateAssignment,
 } = require('./firestore-operations');
 
 // ── STARTUP VALIDATION ─────────────────────────────────────────
@@ -221,13 +226,13 @@ app.post('/auth/sign-up', authLimiter, async (req, res) => {
 });
 
 app.post('/auth/register', authLimiter, async (req, res) => {
-  const { email, password, name } = req.body;
+  const { email, password, name, role, company_id } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
   if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
 
   let firebaseUser = null;
   try {
-    firebaseUser = await createUser(email, password, { name });
+    firebaseUser = await createUser(email, password, { name, role: role || 'independent', company_id: company_id || null });
     const firebaseRes = await fetch(
       `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${process.env.FIREBASE_API_KEY}`,
       { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password, returnSecureToken: true }) }
@@ -236,7 +241,7 @@ app.post('/auth/register', authLimiter, async (req, res) => {
     if (firebaseData.error) return res.status(400).json({ error: 'Échec de la génération du token' });
     res.status(201).json({
       token: firebaseData.idToken,
-      user: { uid: firebaseUser.uid, email, name: name || email.split('@')[0], plan: 'free', daily_limit: 10, daily_used: 0, remaining: 10 },
+      user: { uid: firebaseUser.uid, email, name: name || email.split('@')[0], role: role || 'independent', plan: 'free', daily_limit: 10, daily_used: 0, remaining: 10 },
       message: 'User created successfully',
     });
   } catch (error) {
@@ -704,13 +709,43 @@ app.post('/api/companies/import', verifyAdmin, upload.single('file'), async (req
 
 app.post('/api/search', verifyToken, async (req, res) => {
   try {
-    const { query, filters = {} } = req.body;
-    const companies = await searchCompanies({
-      query, sector: filters.secteur || filters.sector || null,
-      region: filters.region || null, city: filters.ville || filters.city || null,
-      limit: filters.limit || 50, active: true,
-    });
-    res.json({ count: companies.length, source: 'database', results: companies });
+    const { query, filters = {}, use_ai } = req.body;
+    const searchParams = {
+      query,
+      sector: filters.secteur || filters.sector || null,
+      region: filters.region || null,
+      city: filters.ville || filters.city || null,
+      limit: filters.limit || 50,
+      active: true,
+    };
+
+    // Pass through around_me if provided (expects { lat, lon, radius })
+    if (filters.around_me) searchParams.around_me = filters.around_me;
+
+    const companies = await searchCompanies(searchParams);
+
+    let ai_text = null;
+    if (use_ai) {
+      try {
+        // Lightweight summary: count, top sectors, avg score
+        const count = companies.length;
+        const sectorCount = {};
+        let scoreSum = 0, scored = 0;
+        companies.forEach(c => {
+          const s = c.sector || c.secteur || c.activite_principale || c.activitePrincipale || 'Autre';
+          sectorCount[s] = (sectorCount[s] || 0) + 1;
+          if (typeof c.leadScore === 'number') { scoreSum += c.leadScore; scored++; }
+        });
+        const topSectors = Object.entries(sectorCount).sort((a,b) => b[1]-a[1]).slice(0,3).map(e => `${e[0]} (${e[1]})`).join(', ') || 'Aucun secteur dominant';
+        const avgScore = scored ? Math.round(scoreSum / scored) : 'N/A';
+        ai_text = `Trouvé ${count} entreprise${count>1?'s':''} — secteurs principaux : ${topSectors} — score moyen : ${avgScore}.`;
+      } catch (e) {
+        console.warn('AI summary generation failed:', e.message || e);
+        ai_text = null;
+      }
+    }
+
+    res.json({ count: companies.length, source: 'database', results: companies, ai_text });
   } catch (error) { return safeError(res, 500, 'Erreur lors de la recherche', error); }
 });
 
@@ -769,6 +804,69 @@ app.get('/api/config', verifyToken, async (req, res) => {
     const value = await getConfig(key);
     res.json({ key, value });
   } catch (error) { return safeError(res, 500, 'Impossible de récupérer la configuration', error); }
+});
+// ── ASSIGNMENTS API ─────────────────────────────────────────────
+app.post('/api/assignments', verifyToken, async (req, res) => {
+  try {
+    const { assigneeId, prospectIds = [], note = '' } = req.body;
+    if (!assigneeId || !Array.isArray(prospectIds) || prospectIds.length === 0) return res.status(400).json({ error: 'assigneeId and prospectIds are required' });
+
+    // Resolve email -> uid if necessary
+    let assigneeUid = assigneeId;
+    try {
+      if (String(assigneeId || '').includes('@')) {
+        const userRec = await auth.getUserByEmail(assigneeId);
+        assigneeUid = userRec.uid;
+      }
+    } catch (e) {
+      return res.status(404).json({ error: 'Assignee not found' });
+    }
+
+    // Security: only allow creating assignments for members of the manager's team
+    // Admins bypass this check
+    const isAdmin = req.user && req.user.isAdmin === true;
+    if (!isAdmin && assigneeUid !== req.userId) {
+      try {
+        const members = await getTeamMembers(req.userId, 2000);
+        const allowed = Array.isArray(members) && members.some(m => m.uid === assigneeUid);
+        if (!allowed) return res.status(403).json({ error: 'Assignee is not part of your team' });
+      } catch (e) {
+        return safeError(res, 500, 'Impossible de vérifier les membres de l\'équipe', e);
+      }
+    }
+
+    const created = await addAssignments(req.userId, assigneeUid, prospectIds, note);
+    res.json({ success: true, created });
+  } catch (error) { return safeError(res, 500, 'Impossible de créer les assignations', error); }
+});
+
+app.get('/api/assignments', verifyToken, async (req, res) => {
+  try {
+    const assignments = await getAssignmentsForUser(req.userId, req.query.limit || 200);
+    res.json({ data: assignments });
+  } catch (error) { return safeError(res, 500, 'Impossible de charger les assignations', error); }
+});
+
+// GET team members for manager (returns users related to the requesting manager)
+app.get('/api/team', verifyToken, async (req, res) => {
+  try {
+    const members = await getTeamMembers(req.userId, req.query.limit || 200);
+    res.json({ data: members });
+  } catch (error) { return safeError(res, 500, 'Impossible de charger les membres de l\'équipe', error); }
+});
+
+app.get('/api/assignments/manager', verifyToken, async (req, res) => {
+  try {
+    const assignments = await getAssignmentsCreatedBy(req.userId, req.query.limit || 200);
+    res.json({ data: assignments });
+  } catch (error) { return safeError(res, 500, 'Impossible de charger les assignations du manager', error); }
+});
+
+app.put('/api/assignments/:id', verifyToken, async (req, res) => {
+  try {
+    const updated = await updateAssignment(req.params.id, req.body);
+    res.json({ data: updated });
+  } catch (error) { return safeError(res, 500, 'Impossible de mettre à jour l\'assignation', error); }
 });
 
 app.post('/api/config', verifyToken, async (req, res) => {

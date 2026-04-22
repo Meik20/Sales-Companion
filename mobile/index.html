@@ -340,6 +340,13 @@ body{font-family:'Outfit',sans-serif;color:var(--tx);display:flex;flex-direction
     <div id="register-form" style="display:none">
       <div class="field"><label>Nom complet</label><input type="text" id="r-name" placeholder="Jean Dupont" autocomplete="name"></div>
       <div class="field"><label>Email</label><input type="email" id="r-email" placeholder="vous@exemple.com" inputmode="email" autocomplete="email"></div>
+      <div class="field"><label>Type de compte</label>
+        <select id="r-account-type" style="width:100%;padding:9px;border:1px solid var(--bd);border-radius:8px" onchange="onRegisterAccountTypeChangeMobile()">
+          <option value="independent">Commercial indépendant</option>
+          <option value="manager">Compte entreprise — Manager</option>
+        </select>
+      </div>
+      <div class="field" id="r-company-row" style="display:none"><label>ID Société (optionnel)</label><input type="text" id="r-company" placeholder="company_id (pour comptes entreprise)"></div>
       <div class="field"><label>Mot de passe</label><input type="password" id="r-pass" placeholder="Minimum 6 caractères" autocomplete="new-password"></div>
       <div class="a-err" id="r-err"></div>
       <button class="a-btn" id="r-btn" onclick="doRegister()">Créer mon compte →</button>
@@ -392,6 +399,17 @@ body{font-family:'Outfit',sans-serif;color:var(--tx);display:flex;flex-direction
         Filtres avancés <span id="filter-count" style="display:none;background:var(--g);color:#fff;border-radius:10px;font-size:10px;padding:1px 6px;font-weight:700"></span>
       </div>
       <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+        <div style="display:flex;gap:8px;align-items:center;flex:1;min-width:180px">
+          <label for="prospect-radius" style="font-size:13px;color:var(--tx3);white-space:nowrap">Rayon</label>
+          <select id="prospect-radius" style="flex:1;padding:10px 12px;border:1.5px solid var(--bd2);border-radius:var(--r);background:var(--bg3);font-family:'Outfit',sans-serif;color:var(--tx);">
+            <option value="5">5 km</option>
+            <option value="10" selected>10 km</option>
+            <option value="20">20 km</option>
+            <option value="50">50 km</option>
+          </select>
+        </div>
+        <button class="sheet-btn secondary" style="flex:1;min-width:120px" onclick="openProspectsAroundMe()">🧭 Prospects autour de moi</button>
+        <button class="sheet-btn secondary" style="flex:1;min-width:120px" onclick="openAIListBuilder()">🤖 Liste IA</button>
         <button class="sheet-btn secondary" style="flex:1;min-width:120px" onclick="openMyLocationMap()">📍 Ma position</button>
         <button class="sheet-btn secondary" style="flex:1;min-width:120px" onclick="openOfflineSheet()">📥 Hors ligne</button>
       </div>
@@ -564,6 +582,7 @@ body{font-family:'Outfit',sans-serif;color:var(--tx);display:flex;flex-direction
         <option value="conclue">✅ Conclue</option>
       </select>
     </div>
+    <div class="sfield"><label>Assigné à</label><input type="text" id="pip-assigned-to" placeholder="Nom du commercial"></div>
     <div class="sfield"><label>Note</label><textarea id="pip-note" placeholder="Observations, contacts rencontrés..."></textarea></div>
     <button class="sheet-btn" onclick="confirmAddPipeline()">Ajouter au pipeline</button>
   </div>
@@ -632,9 +651,21 @@ body{font-family:'Outfit',sans-serif;color:var(--tx);display:flex;flex-direction
     <div class="sfield"><label>Entreprise</label><div id="crowd-company" style="font-weight:700;color:var(--tx)"></div></div>
     <div class="sfield"><label>Sujet</label><input id="crowd-subject" type="text" placeholder="Signalement de fiche"></div>
     <div class="sfield"><label>Détails</label><textarea id="crowd-message" rows="4" placeholder="Expliquez la correction ou le problème..."></textarea></div>
+    <div style="font-size:12px;color:var(--tx3);margin-bottom:10px">Chaque signalement validé rapporte des crédits et améliore la fiabilité de la base.</div>
     <button class="sheet-btn" onclick="sendCrowdReport()">Envoyer le signalement</button>
   </div>
 </div>
+
+  <!-- ASSIGNMENTS SHEET -->
+  <div class="sheet-overlay" id="assignments-overlay" onclick="closeSheet('assignments-sheet')"></div>
+  <div class="sheet" id="assignments-sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">Mes tâches assignées</div>
+    <div class="sheet-body">
+      <div id="assignments-list" style="display:flex;flex-direction:column;gap:10px;max-height:320px;overflow:auto;padding-bottom:8px"></div>
+      <div style="margin-top:12px"><button class="sheet-btn" onclick="refreshAssignments()">Rafraîchir</button></div>
+    </div>
+  </div>
 
 <div class="sheet-overlay" id="map-overlay" onclick="closeSheet('map-sheet')"></div>
 <div class="sheet" id="map-sheet">
@@ -643,6 +674,48 @@ body{font-family:'Outfit',sans-serif;color:var(--tx);display:flex;flex-direction
   <div class="sheet-body" style="padding:0">
     <iframe id="map-frame" loading="lazy" allowfullscreen style="width:100%;height:320px;border:none;border-radius:16px;"></iframe>
     <div id="map-caption" style="font-size:13px;color:var(--tx3);padding:12px 14px">Itinéraire et géolocalisation.</div>
+  </div>
+</div>
+
+<div class="sheet-overlay" id="prospect-map-overlay" onclick="closeSheet('prospect-map-sheet')"></div>
+<div class="sheet" id="prospect-map-sheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-title">Prospects autour de moi</div>
+  <div class="sheet-body" style="padding:0">
+    <div style="padding:16px 16px 0;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+      <div style="flex:1;min-width:180px">
+        <div id="prospect-map-caption" style="font-size:14px;font-weight:700;color:var(--tx)">Chargement de la carte...</div>
+        <div id="prospect-map-sub" style="font-size:12px;color:var(--tx3);margin-top:4px">Toutes les entreprises à proximité.</div>
+      </div>
+      <button class="sheet-btn secondary" style="min-width:120px" onclick="closeSheet('prospect-map-sheet')">Fermer</button>
+    </div>
+    <div class="map-panel open" style="height:280px;margin:14px 16px 16px">
+      <iframe id="prospect-map-iframe" loading="lazy" allowfullscreen style="width:100%;height:100%;border:none;border-radius:16px;"></iframe>
+    </div>
+    <div id="prospect-map-ai" style="padding:0 16px 12px;font-size:13px;color:var(--tx3);line-height:1.5"></div>
+    <div id="prospect-map-list" style="padding:0 16px 16px;display:flex;flex-direction:column;gap:10px;"></div>
+  </div>
+</div>
+
+<div class="sheet-overlay" id="pitch-overlay" onclick="closeSheet('pitch-sheet')"></div>
+<div class="sheet" id="pitch-sheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-title">Pitch commercial IA</div>
+  <div class="sheet-body">
+    <div class="sfield"><label>Entreprise</label><div id="pitch-company-name" style="font-weight:700;color:var(--tx)"></div></div>
+    <div id="pitch-output" style="font-size:14px;line-height:1.7;color:var(--tx);min-height:120px;padding:10px 0"></div>
+    <button class="sheet-btn" onclick="copyPitchText()">Copier le pitch</button>
+  </div>
+</div>
+
+<div class="sheet-overlay" id="ai-builder-overlay" onclick="closeSheet('ai-builder-sheet')"></div>
+<div class="sheet" id="ai-builder-sheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-title">Constructeur de listes IA</div>
+  <div class="sheet-body">
+    <div class="sfield"><label>Requête commerciale</label><textarea id="ai-builder-query" rows="4" placeholder="Cherche les meilleures PME à Douala pour une solution de gestion des stocks..."></textarea></div>
+    <button class="sheet-btn" onclick="runAIListBuilder()">Générer la liste</button>
+    <div id="ai-builder-output" style="margin-top:14px"></div>
   </div>
 </div>
 
@@ -665,12 +738,14 @@ body{font-family:'Outfit',sans-serif;color:var(--tx);display:flex;flex-direction
     <div style="border-top:1px solid var(--bd);margin-top:16px;padding-top:16px">
       <div style="font-size:12px;font-weight:700;color:var(--tx3);text-transform:uppercase;margin-bottom:10px">Navigation</div>
       <button class="sheet-btn secondary" onclick="openLanding()" style="margin-bottom:8px">📍 Retour à l'accueil</button>
+      <button id="manager-assign-btn-m" class="sheet-btn secondary" onclick="openManagerAssignMobile()" style="margin-bottom:8px;display:none">🗂️ Créer assignation</button>
     </div>
     <div style="border-top:1px solid var(--bd);margin-top:16px;padding-top:16px">
       <div style="font-size:12px;font-weight:700;color:var(--tx3);text-transform:uppercase;margin-bottom:10px">Application</div>
       <div style="font-size:12px;color:var(--tx3);margin-bottom:8px">Version actuelle: <strong id="app-version">1.2.0</strong></div>
       <button class="sheet-btn secondary" onclick="checkForUpdates()" style="margin-bottom:8px">🔍 Vérifier les mises à jour</button>
       <div style="font-size:11px;color:var(--tx3)">Dernière vérification: <span id="last-check">jamais</span></div>
+      <button class="sheet-btn secondary" onclick="openAssignmentsSheet()" style="margin-top:8px">🗂️ Mes tâches</button>
     </div>
     <button class="lg-btn-m" onclick="doLogout()">Se déconnecter</button>
   </div>
@@ -820,7 +895,8 @@ const REGION_CITIES = {
 };
 
 let token = localStorage.getItem('sc_token') || '';
-let user = null, chatHistory = [], pipelineData = [], pipelineCompanies = {}, lastResults = [], lastFilters = {}, lastQuery = '';
+let user = null, chatHistory = [], pipelineData = [], pipelineCompanies = {}, lastResults = [], lastProspectResults = [], lastFilters = {}, lastQuery = '';
+let selectedForAssignMobile = new Set();
 let isSearching = false, isChatting = false, currentPipTab = 'prospection';
 let addPipDefault = {};
 let isInitializing = true;
@@ -964,6 +1040,19 @@ function renderOfflineSheet() {
 
 async function syncOfflineQueue() {
   if (!navigator.onLine) {
+
+  <!-- MANAGER CREATE ASSIGN SHEET -->
+  <div class="sheet-overlay" id="assign-create-overlay" onclick="closeSheet('assign-create-sheet')"></div>
+  <div class="sheet" id="assign-create-sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">Créer assignation (manager)</div>
+    <div class="sheet-body">
+      <div style="font-size:13px;color:var(--tx3);margin-bottom:8px">Prospects sélectionnés: <span id="assign-count-m">0</span></div>
+      <div style="margin-bottom:8px"><select id="assign-assignee-m" style="width:100%;padding:9px;border:1px solid var(--bd);border-radius:8px"><option value="">Chargement…</option></select></div>
+      <div style="margin-bottom:8px"><input id="assign-note-m" placeholder="Note (optionnel)" style="width:100%;padding:9px;border:1px solid var(--bd);border-radius:8px"></div>
+      <div style="display:flex;gap:8px"><button class="sheet-btn" onclick="submitAssignmentMobile()">Créer assignation</button><button class="sheet-btn secondary" onclick="closeSheet('assign-create-sheet')">Annuler</button></div>
+    </div>
+  </div>
     toast('Connectez-vous pour synchroniser les actions hors ligne');
     renderOfflineSheet();
     return;
@@ -1077,6 +1166,228 @@ function openMyLocationMap() {
   }, (err) => {
     toast('Erreur de localisation : ' + err.message);
   }, { enableHighAccuracy: true, timeout: 10000 });
+}
+
+async function openProspectsAroundMe() {
+  if (!navigator.geolocation) {
+    toast('Géolocalisation non supportée par votre navigateur');
+    return;
+  }
+  const radius = parseInt(document.getElementById('prospect-radius')?.value || '10', 10);
+  toast(`🧭 Recherche des prospects dans un rayon de ${radius} km...`);
+  navigator.geolocation.getCurrentPosition(async (pos) => {
+    const lat = pos.coords.latitude.toFixed(5);
+    const lon = pos.coords.longitude.toFixed(5);
+    const caption = document.getElementById('prospect-map-caption');
+    const sub = document.getElementById('prospect-map-sub');
+    const aiEl = document.getElementById('prospect-map-ai');
+    const list = document.getElementById('prospect-map-list');
+    const iframe = document.getElementById('prospect-map-iframe');
+    caption.textContent = `Prospects autour de vous — ${radius} km`;
+    sub.textContent = `${lat}, ${lon}`;
+    aiEl.textContent = 'Chargement des recommandations IA...';
+    list.innerHTML = '';
+    if (iframe) {
+      iframe.src = `https://maps.google.com/maps?q=entreprises+autour+de+${lat},${lon}+dans+un+rayon+de+${radius}+km&z=12&output=embed`;
+    }
+    openSheet('prospect-map-sheet');
+    try {
+      const r = await api('POST', '/api/search', {
+        query: `Prospects autour de moi dans un rayon de ${radius} km`,
+        filters: { around_me: { lat, lon, radius } },
+        use_ai: true
+      }, token);
+      const data = await r.json();
+      if (r.status === 429 && data.upgrade) {
+        aiEl.innerHTML = `<strong>⚠️ Limite atteinte</strong><br>${data.error}`;
+      } else if (data.error) {
+        aiEl.textContent = 'Erreur IA : ' + data.error;
+      } else {
+        const results = data.results || [];
+        aiEl.innerHTML = data.ai_text ? `<strong>IA :</strong> ${fmtChat(data.ai_text)}` : 'IA : recommandations générées pour votre zone.';
+        if (!results.length) {
+          list.innerHTML = `<div class="empty-state" style="padding:20px"><div class="empty-icon">📍</div><h2>Aucun prospect ciblé</h2><p>Essayez un rayon plus large ou un autre secteur.</p></div>`;
+        } else {
+          lastProspectResults = results;
+          list.innerHTML = results.slice(0, 10).map((co, i) => {
+            const name = co.raison_sociale || co.company_name || co.nom || co.name || '—';
+            const address = co.adresse || co.ville || co.region || '—';
+            const sector = co.secteur || co.activite_principale || 'Secteur inconnu';
+            return `<div class="co-card" style="padding:12px">
+              <div class="co-head" style="gap:10px">
+                <div class="co-av" style="background:var(--bg3);color:var(--g);min-width:40px">${name.slice(0,2).toUpperCase()}</div>
+                <div class="co-meta">
+                  <div class="co-name">${name}</div>
+                  <div class="co-sub">${sector} · ${address}</div>
+                </div>
+              </div>
+              <div class="co-footer" style="gap:8px">
+                <button class="ca maps" onclick="openProspectRoute(${i})">Itinéraire</button>
+                <button class="ca share" onclick="copyProspectInfo(${i})">Partager</button>
+              </div>
+            </div>`;
+          }).join('');
+        }
+      }
+    } catch (e) {
+      aiEl.textContent = 'Erreur : ' + e.message;
+      list.innerHTML = `<div class="empty-state" style="padding:20px"><div class="empty-icon">⚠️</div><h2>Connexion impossible</h2><p>${e.message}</p></div>`;
+    }
+  }, (err) => {
+    toast('Erreur de localisation : ' + err.message);
+  }, { enableHighAccuracy: true, timeout: 10000 });
+}
+
+function openProspectRoute(i) {
+  const co = lastProspectResults[i];
+  if (!co) return;
+  if (!navigator.geolocation) {
+    toast('Géolocalisation non supportée par votre navigateur');
+    return;
+  }
+  navigator.geolocation.getCurrentPosition((pos) => {
+    const frame = document.getElementById('prospect-map-iframe');
+    const origin = `${pos.coords.latitude.toFixed(5)},${pos.coords.longitude.toFixed(5)}`;
+    const destination = encodeURIComponent(`${co.raison_sociale || co.company_name || co.nom || co.name || ''} ${co.adresse || co.ville || co.region || ''} Cameroun`);
+    if (frame) {
+      frame.src = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}`;
+    }
+    document.getElementById('prospect-map-caption').textContent = `Itinéraire vers ${co.raison_sociale || co.company_name || co.nom || co.name || 'ce prospect'}`;
+  }, (err) => {
+    toast('Impossible d’obtenir la position : ' + err.message);
+  }, { enableHighAccuracy: true, timeout: 10000 });
+}
+
+function getCompanyReliability(company) {
+  let label = 'Fiabilité inconnue';
+  let color = 'var(--tx3)';
+  let score = null;
+  const updatedAt = company.updatedAt || company.updated_at || company.lastUpdated || company.last_updated || company.updated_at || company.updated_at || null;
+  if (company.active === false || company.fermee || company.closed) {
+    label = 'Fermée';
+    color = 'var(--rl)';
+    score = 10;
+  } else if (updatedAt) {
+    const date = new Date(updatedAt);
+    if (!isNaN(date)) {
+      const age = Math.floor((Date.now() - date.getTime()) / 86400000);
+      if (age <= 30) {
+        label = 'Haute';
+        color = 'var(--g)';
+        score = 95;
+      } else if (age <= 90) {
+        label = 'Moyenne';
+        color = 'var(--blue)';
+        score = 70;
+      } else if (age <= 180) {
+        label = 'Moyenne';
+        color = '#ddaa33';
+        score = 55;
+      } else {
+        label = 'Faible';
+        color = 'var(--rl)';
+        score = 30;
+      }
+    }
+  }
+  return { label, color, score };
+}
+
+function openPitchSheet(i) {
+  const co = lastResults[i];
+  if (!co) return;
+  document.getElementById('pitch-company-name').textContent = co.raison_sociale || co.company_name || co.nom || co.name || 'Entreprise';
+  document.getElementById('pitch-output').textContent = 'Génération du pitch en cours…';
+  openSheet('pitch-sheet');
+  api('POST', '/api/pitch', { company: co }, token)
+    .then(async (r) => {
+      const data = await r.json();
+      if (!r.ok) {
+        document.getElementById('pitch-output').textContent = data.error || 'Impossible de générer le pitch';
+        return;
+      }
+      document.getElementById('pitch-output').innerHTML = fmtChat(data.pitch || 'Aucun pitch reçu');
+    })
+    .catch((err) => {
+      document.getElementById('pitch-output').textContent = 'Erreur: ' + err.message;
+    });
+}
+
+function copyPitchText() {
+  const text = document.getElementById('pitch-output').innerText;
+  if (!text) return toast('Aucun pitch à copier');
+  navigator.clipboard.writeText(text).then(() => toast('Pitch copié')).catch(() => toast('Copie impossible'));
+}
+
+function openAIListBuilder() {
+  document.getElementById('ai-builder-query').value = '';
+  document.getElementById('ai-builder-output').innerHTML = '';
+  openSheet('ai-builder-sheet');
+}
+
+async function runAIListBuilder() {
+  const query = document.getElementById('ai-builder-query').value.trim();
+  if (!query) return toast('Saisissez une requête IA');
+  document.getElementById('ai-builder-output').innerHTML = '<div class="loading-state"><div class="spinner"></div><div>Recherche IA en cours…</div></div>';
+  try {
+    await doSearch(query, { use_ai: true });
+    closeSheet('ai-builder-sheet');
+  } catch (e) {
+    document.getElementById('ai-builder-output').textContent = 'Erreur IA : ' + e.message;
+  }
+}
+
+async function openAssignmentsSheet() {
+  document.getElementById('assignments-list').innerHTML = '<div class="loading-state"><div class="spinner"></div><div>Chargement des tâches…</div></div>';
+  openSheet('assignments-sheet');
+  await refreshAssignments();
+}
+
+async function refreshAssignments() {
+  try {
+    const r = await api('GET', '/api/assignments', null, token);
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}));
+      document.getElementById('assignments-list').innerHTML = `<div class="empty-state"><div class="empty-icon">❌</div><h2>Erreur</h2><p>${d.error||'Impossible de charger'}</p></div>`;
+      return;
+    }
+    const data = await r.json();
+    const list = data.data || [];
+    const container = document.getElementById('assignments-list');
+    if (!list.length) { container.innerHTML = '<div class="empty-state"><div class="empty-icon">🗂️</div><h2>Aucune tâche</h2><p>Vous n\'avez aucune tâche assignée pour le moment.</p></div>'; return; }
+    container.innerHTML = list.map(a => {
+      const company = a.company_id || '—';
+      const status = a.status || 'assigned';
+      const note = a.note ? `<div style="font-size:13px;color:var(--tx3);margin-top:6px">${a.note}</div>` : '';
+      return `<div class="co-card"><div style="display:flex;align-items:center;justify-content:space-between"><div style="font-weight:700">${company}</div><div style="font-size:12px;color:var(--tx3)">${status}</div></div>${note}<div style="display:flex;gap:8px;margin-top:8px"><button class="sheet-btn" onclick="markAssignmentDone('${a.id}')">Marquer fait</button><button class="sheet-btn secondary" onclick="openCompanyFromAssignment('${a.company_id}')">Ouvrir fiche</button></div></div>`;
+    }).join('');
+  } catch (e) {
+    document.getElementById('assignments-list').innerHTML = `<div class="empty-state"><div class="empty-icon">📡</div><h2>Connexion impossible</h2><p>${e.message}</p></div>`;
+  }
+}
+
+function openCompanyFromAssignment(companyId) {
+  // Try to find company in lastResults, otherwise open search for that company
+  const idx = lastResults.findIndex(c => c.id === companyId);
+  if (idx !== -1) { window.scrollTo(0,0); toggleMapM('co-' + idx, encodeURIComponent((lastResults[idx].raison_sociale||lastResults[idx].company_name||'') + ' ' + (lastResults[idx].ville||'') + ' Cameroun')); return; }
+  // fallback: run a search and open results
+  runSearch(companyId, {});
+}
+
+async function markAssignmentDone(id) {
+  try {
+    const r = await api('PUT', '/api/assignments/' + id, { status: 'done' }, token);
+    if (!r.ok) { const d = await r.json().catch(()=>({})); return toast('Erreur: ' + (d.error||'')); }
+    toast('Tâche marquée comme faite');
+    await refreshAssignments();
+  } catch (e) { toast('Erreur: ' + e.message); }
+}
+
+function copyProspectInfo(i) {
+  const co = lastProspectResults[i];
+  if (!co) return;
+  const text = `🏢 ${co.raison_sociale || co.company_name || co.nom || co.name || '—'}\n📂 ${co.secteur || co.activite_principale || '—'}\n📍 ${co.ville || co.region || '—'}\n📞 ${co.telephone || co.tel || ''}\n📧 ${co.email || co.contact_email || co.company_email || ''}`;
+  navigator.clipboard.writeText(text).then(() => toast('✅ Prospect copié')).catch(() => toast('Copie impossible'));
 }
 
 function openMapRoute(i) {
@@ -1222,7 +1533,7 @@ async function sendCrowdReport() {
   try {
     const r = await api('POST', '/api/support/messages', { subject, message }, token);
     if (!r.ok) throw new Error('Erreur lors de l’envoi');
-    toast('Signalement envoyé au support');
+    toast('Signalement envoyé au support — vous gagnez des crédits une fois validé');
     closeSheet('crowd-sheet');
     loadSupportMessagesMobile();
   } catch (e) {
@@ -1382,11 +1693,15 @@ async function doRegister() {
     const email = document.getElementById('r-email').value.trim();
     const password = document.getElementById('r-pass').value;
     if (!name || !email || !password || password.length < 6) throw new Error('Tous les champs requis (mot de passe min 6 caractères)');
+    const accountType = document.getElementById('r-account-type').value;
+    const companyId = document.getElementById('r-company') ? document.getElementById('r-company').value.trim() : null;
     const cred = await auth.createUserWithEmailAndPassword(email, password);
     const fbUser = cred.user;
     await fbUser.updateProfile({ displayName: name });
     await db.collection('users').doc(fbUser.uid).set({
       uid: fbUser.uid, email: fbUser.email, name,
+      role: accountType === 'manager' ? 'manager' : 'independent',
+      company_id: accountType === 'manager' ? (companyId || null) : null,
       plan: 'free', daily_limit: 10, daily_used: 0,
       last_reset: new Date().toISOString(), active: true,
       created_at: new Date().toISOString(), updated_at: new Date().toISOString()
@@ -1426,6 +1741,11 @@ function showApp() {
   updateTopbar();
   loadPipeline();
   loadSaved();
+  // show manager controls only for managers
+  try{
+    const mbtn = document.getElementById('manager-assign-btn-m');
+    if(mbtn) mbtn.style.display = (user && user.role === 'manager') ? 'block' : 'none';
+  }catch(e){}
   if (navigator.onLine) syncOfflineQueue();
 }
 
@@ -1581,6 +1901,12 @@ function renderResults(data) {
   hdr.className = 'results-hdr';
   hdr.innerHTML = `<span><strong>${companies.length}</strong> résultat${companies.length > 1 ? 's' : ''}</span><span class="src-badge src-db">✓ Base officielle</span>`;
   area.appendChild(hdr);
+  if (data.ai_text) {
+    const aiSummary = document.createElement('div');
+    aiSummary.className = 'results-ai';
+    aiSummary.innerHTML = `<strong>Recommandations IA :</strong> ${fmtChat(data.ai_text)}`;
+    area.appendChild(aiSummary);
+  }
   if (!companies.length) {
     area.innerHTML += `<div class="empty-state" style="flex:none;padding:24px 0"><div class="empty-icon" style="font-size:36px">🏢</div><h2 style="font-size:16px">Aucun résultat</h2><p>Aucune entreprise dans la base pour ces critères.${data.ai_text ? '<br><br>' + fmtChat(data.ai_text) : ''}</p></div>`;
     return;
@@ -1599,15 +1925,21 @@ function renderResults(data) {
     const email = co.email || co.contact_email || co.company_email || '';
     const address = co.adresse || co.company_address || '';
     const inPipeline = pipelineCompanies[co.id];
+    const leadScore = co.leadScore || co.lead_score || co.score || co.relevance_score || null;
+    const reliability = getCompanyReliability(co);
     const pipelineBadge = inPipeline ? `<span class="cbadge" style="background:var(--gl);color:var(--g);font-weight:600">📌 En pipeline</span>` : '';
+    const scoreBadge = leadScore ? `<span class="cbadge cb-score">Score: ${Math.round(leadScore)}</span>` : '';
+    const reliabilityBadge = `<span class="cbadge" style="background:${reliability.color};color:#fff;font-weight:600">${reliability.label}${reliability.score ? ' • ' + reliability.score : ''}</span>`;
     card.innerHTML = `
       <div class="co-head">
         <div class="co-av">${initials}</div>
         <div class="co-meta">
           <div class="co-name">${name}${co.sigle ? ` <span style="font-size:11px;color:var(--tx3)">(${co.sigle})</span>` : ''}</div>
-          <div class="co-sub">${co.secteur ? '📂 ' + co.secteur : ''}${co.ville ? ' · 📍 ' + co.ville : ''}</div>
+          <div class="co-sub">${co.secteur ? '📂 ' + co.secteur : ''}${co.ville ? ' · 📍 ' + co.ville : ''}${typeof co._distance_km === 'number' ? ' · 📏 ' + co._distance_km + ' km' : ''}</div>
           <div class="co-badges">
             ${pipelineBadge}
+            ${scoreBadge}
+            ${reliabilityBadge}
             ${co.statut_juridique ? `<span class="cbadge cb-type">${co.statut_juridique}</span>` : ''}
             ${co.niu ? `<span class="cbadge cb-niu">NIU: ${co.niu}</span>` : ''}
             ${co.rccm ? '<span class="cbadge cb-green">RCCM ✓</span>' : ''}
@@ -1629,12 +1961,16 @@ function renderResults(data) {
         <button class="ca nav" onclick="openMapRoute(${i})">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 20l-5-5 7-7 5 5-7 7z"/><path d="M14 9l5 5"/></svg>Itinéraire
         </button>
+        <button class="ca pitch" onclick="openPitchSheet(${i})">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18"/><path d="M12 3v18"/></svg>Pitch
+        </button>
         <button class="ca note" onclick="openVoiceNoteSheet(${i})">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V4a3 3 0 0 1 3-3z"/><path d="M5 10a7 7 0 0 0 14 0"/><path d="M12 19v4"/><path d="M8 23h8"/></svg>Note
         </button>
         <button class="ca report" onclick="openCrowdSheet(${i})">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 3h4l1 7H9l1-7z"/><path d="M6 10h12"/><path d="M12 13v5"/><path d="M10 19h4"/></svg>Signaler
         </button>
+        ${user && user.role==='manager'?`<button class="ca" id="sel-btn-m-${i}" onclick="toggleSelectForAssignMobile(${i})" style="border:1px dashed var(--bd2);background:transparent">Sélectionner</button>`:''}
       </div>
       <div class="map-panel" id="map-${id}">
         <button class="map-close" onclick="toggleMapM('${id}','')">✕ Fermer la carte</button>
@@ -1652,6 +1988,58 @@ function toggleMapM(id, query) {
     const iframe = p.querySelector('iframe');
     if (!iframe.src) iframe.src = 'https://maps.google.com/maps?q=' + query + '&output=embed&z=15';
   }
+}
+
+function toggleSelectForAssignMobile(i){
+  const co = lastResults[i]; if(!co) return;
+  const key = co.id || co.niu || co.siren || i;
+  const btn = document.getElementById('sel-btn-m-' + i);
+  if(selectedForAssignMobile.has(key)){
+    selectedForAssignMobile.delete(key);
+    if(btn){ btn.style.background='transparent'; btn.style.border='1px dashed var(--bd2)'; btn.textContent='Sélectionner'; }
+  } else {
+    selectedForAssignMobile.add(key);
+    if(btn){ btn.style.background='var(--g)'; btn.style.color='#fff'; btn.textContent='Sélectionné'; }
+  }
+  document.getElementById('assign-count-m').textContent = selectedForAssignMobile.size;
+}
+
+function openManagerAssignMobile(){
+  document.getElementById('assign-count-m').textContent = selectedForAssignMobile.size;
+  loadTeamMembersMobile();
+  openSheet('assign-create-sheet');
+}
+
+async function submitAssignmentMobile(){
+  const assignee = document.getElementById('assign-assignee-m').value.trim();
+  const note = document.getElementById('assign-note-m').value.trim();
+  if(!assignee){ toast('Saisissez l\'UID ou l\'email du commercial'); return; }
+  if(selectedForAssignMobile.size===0){ toast('Aucun prospect sélectionné'); return; }
+  const prospectIds = Array.from(selectedForAssignMobile);
+  try{
+    const r = await api('POST','/api/assignments',{ assigneeId: assignee, prospectIds, note }, token);
+    if(!r.ok){ const d = await r.json().catch(()=>({}));
+      if(r.status===403) return toast((d.error||'Accès refusé — la personne n\'appartient pas à votre équipe.') + ' Invitez-la dans votre équipe.');
+      if(r.status===404) return toast('Utilisateur introuvable — vérifiez l\'email ou invitez le commercial.');
+      return toast('Erreur: '+(d.error||'')); }
+    toast('✅ Assignation créée');
+    selectedForAssignMobile.clear();
+    document.querySelectorAll('[id^="sel-btn-m-"]').forEach(b=>{ b.style.background='transparent'; b.style.color=''; b.textContent='Sélectionner'; b.style.border='1px dashed var(--bd2)'; });
+    closeSheet('assign-create-sheet');
+  }catch(e){ toast('Erreur: '+e.message); }
+}
+
+async function loadTeamMembersMobile(){
+  const sel = document.getElementById('assign-assignee-m');
+  sel.innerHTML = '<option value="">Chargement…</option>';
+  try{
+    const r = await api('GET','/api/team',null,token);
+    if(!r.ok){ sel.innerHTML = '<option value="">Aucun membre</option>'; return; }
+    const d = await r.json();
+    const list = d.data || [];
+    if(!list.length){ sel.innerHTML = '<option value="">Aucun membre</option>'; return; }
+    sel.innerHTML = list.map(u=>`<option value="${u.uid}">${(u.name||u.email||u.uid)}${u.email?` <${u.email}>`:''}</option>`).join('');
+  }catch(e){ sel.innerHTML = '<option value="">Erreur</option>'; }
 }
 
 function shareCard(i) {
@@ -1755,6 +2143,7 @@ function renderPipeline() {
       <div class="pcard-meta">
         ${p.company_sector ? '<span>📂 ' + p.company_sector + '</span>' : ''}
         ${p.company_city ? '<span>📍 ' + p.company_city + '</span>' : ''}
+        ${p.company_assigned_to ? '<span>👥 ' + p.company_assigned_to + '</span>' : ''}
         ${p.company_phone ? '<span>📞 ' + p.company_phone + '</span>' : ''}
       </div>
       ${p.note ? `<div class="pcard-note">${p.note}</div>` : ''}
@@ -1941,6 +2330,9 @@ async function sendChat() {
   inp.value = ''; inp.style.height = 'auto';
   addChatMsg('user', text.replace(/</g, '&lt;'));
   chatHistory.push({ role: 'user', content: text });
+  if (/prospects autour de moi|prospects autours de moi|prospect autour de moi|à proximité/i.test(text)) {
+    openProspectsAroundMe();
+  }
   isChatting = true; document.getElementById('chat-send').disabled = true;
   const loadEl = addChatMsg('bot', '', true);
   try {
@@ -2298,6 +2690,11 @@ document.addEventListener('DOMContentLoaded', () => {
     toast('⚠️ Hors ligne, actions stockées localement');
   });
 });
+</script>
+<script>
+function onRegisterAccountTypeChangeMobile(){
+  try{ const v=document.getElementById('r-account-type').value; document.getElementById('r-company-row').style.display = v==='manager' ? 'block':'none'; }catch(e){}
+}
 </script>
 </body>
 </html>

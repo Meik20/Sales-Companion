@@ -72,30 +72,34 @@ self.addEventListener('fetch', (event) => {
   return handleStatic(event);
 });
 
+// Safe fetch helper to ensure a Response is always returned on network failures
+function fetchSafe(request) {
+  try {
+    return fetch(request).catch((err) => {
+      console.warn('[SW] fetchSafe network error:', err && err.message);
+      return new Response('', { status: 408, statusText: 'Network error' });
+    });
+  } catch (e) {
+    return Promise.resolve(new Response('', { status: 408, statusText: 'Network error' }));
+  }
+}
+
 // ================= HANDLERS =================
 
 // 🌍 Requêtes externes (CDN, Firebase, etc.)
 function handleExternal(event) {
   event.respondWith(
-    fetch(event.request)
-      .then(function(response) {
-        if (!response || response.status !== 200 || response.type === 'error') return response;
-        return response;
-      })
-      .catch((err) => {
-        console.warn('[SW] External failed:', event.request.url, err);
-        return new Response('', {
-          status: 408,
-          statusText: 'Network error (CSP or offline)'
-        });
-      })
+    fetchSafe(event.request).then(function(response) {
+      if (!response || response.status !== 200 || response.type === 'error') return response;
+      return response;
+    })
   );
 }
 
 // 🔗 API → Network First
 function handleAPI(event) {
   event.respondWith(
-    fetch(event.request)
+    fetchSafe(event.request)
       .then((res) => {
         if (res && res.status === 200) {
           const clone = res.clone();
@@ -130,7 +134,7 @@ function handleStatic(event) {
     caches.match(event.request).then((cached) => {
       if (cached) return cached;
 
-      return fetch(event.request)
+      return fetchSafe(event.request)
         .then((res) => {
           if (!res || res.status !== 200) return res;
 

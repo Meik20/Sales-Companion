@@ -124,6 +124,23 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, '..', 'server', 'admin')));
 app.use('/mobile', express.static(path.join(__dirname, '..', 'mobile')));
 
+// Content Security Policy header (applied at server level)
+app.use((req, res, next) => {
+  res.setHeader(
+    'Content-Security-Policy',
+    [
+      "default-src 'self'",
+      "connect-src 'self' https://*.firebaseapp.com https://*.googleapis.com https://*.google.com https://identitytoolkit.googleapis.com https://www.gstatic.com https://fonts.gstatic.com https://fonts.googleapis.com",
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      "font-src 'self' https://fonts.gstatic.com data:",
+      "script-src 'self' 'unsafe-inline' https://*.googleapis.com https://*.firebaseapp.com",
+      "frame-src https://*.firebaseapp.com https://maps.google.com https://www.google.com",
+      "img-src 'self' data: https://*.googleapis.com https://*.gstatic.com"
+    ].join('; ')
+  );
+  next();
+});
+
 // ── ROUTES DE BASE ──────────────────────────────────────────────
 
 // Health Check

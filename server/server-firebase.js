@@ -210,6 +210,58 @@ function detectSector(activite) {
   return 'Autres';
 }
 
+// ── AI HELPERS (callOpenAI, formatCompanyForPrompt, generatePitch) ──
+async function callOpenAI(prompt, options = {}) {
+  const apiKey = process.env.OPENAI_API_KEY || process.env.OPENAI_KEY;
+  const model = options.model || process.env.OPENAI_MODEL || 'gpt-3.5-turbo';
+  if (!apiKey) {
+    console.warn('[callOpenAI] OPENAI_API_KEY not set — returning placeholder.');
+    return null;
+  }
+  try {
+    const body = {
+      model,
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: options.max_tokens || 500,
+      temperature: typeof options.temperature === 'number' ? options.temperature : 0.7,
+    };
+    const r = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+      body: JSON.stringify(body),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error?.message || JSON.stringify(data));
+    const text = data.choices?.[0]?.message?.content || data.choices?.[0]?.text || '';
+    return text.trim();
+  } catch (e) {
+    console.error('[callOpenAI] Error:', e.message || e);
+    return null;
+  }
+}
+
+function formatCompanyForPrompt(company) {
+  if (!company) return '';
+  const parts = [];
+  if (company.raison_sociale || company.company_name || company.name) parts.push('Nom: ' + (company.raison_sociale || company.company_name || company.name));
+  if (company.secteur || company.activite_principale) parts.push('Secteur: ' + (company.secteur || company.activite_principale));
+  const loc = [company.ville, company.region, company.adresse].filter(Boolean).join(', ');
+  if (loc) parts.push('Localisation: ' + loc);
+  if (company.telephone || company.tel) parts.push('Téléphone: ' + (company.telephone || company.tel));
+  if (company.email || company.contact_email) parts.push('Email: ' + (company.email || company.contact_email));
+  if (company.effectif || company.size) parts.push('Taille: ' + (company.effectif || company.size));
+  if (company.description) parts.push('Description: ' + company.description);
+  return parts.join('\n');
+}
+
+async function generatePitch(company) {
+  const formatted = formatCompanyForPrompt(company);
+  const prompt = `Génère une accroche commerciale courte (1 phrase) puis un pitch de prospection (2-4 phrases) adapté à cette entreprise. Donne aussi 2 suggestions d'objet d'email. Répond en français.\n\nEntreprise:\n${formatted}`;
+  const ai = await callOpenAI(prompt, { max_tokens: 400, temperature: 0.6 });
+  if (!ai) return 'Assistant IA non disponible.';
+  return ai;
+}
+
 // ══════════════════════════════════════════════════════════════
 // AUTH ROUTES
 // ══════════════════════════════════════════════════════════════
@@ -755,6 +807,34 @@ app.post('/api/chat', verifyToken, async (req, res) => {
     if (!Array.isArray(messages) || messages.length === 0) return res.status(400).json({ error: 'Messages are required' });
     return res.json({ choices: [{ message: { content: 'Assistant IA non configuré.' } }] });
   } catch (error) { return safeError(res, 500, 'Erreur du chat IA', error); }
+});
+
+// ── PITCH ROUTE (génération de pitch via AI) ──
+app.post('/api/pitch', verifyToken, async (req, res) => {
+  try {
+    const { companyId, company } = req.body;
+    let companyData = company;
+
+    if (!companyData && companyId) {
+      const { getFirestore } = require('firebase-admin/firestore');
+      const adminDb = getFirestore();
+      const companyDoc = await adminDb.collection('companies').doc(companyId).get();
+      if (companyDoc.exists) {
+        companyData = { id: companyDoc.id, ...companyDoc.data() };
+      }
+    }
+
+    if (!companyData) {
+      return res.status(400).json({ error: 'Aucune entreprise fournie pour générer une approche.' });
+    }
+
+    const pitch = await generatePitch(companyData);
+    res.json({ pitch });
+
+  } catch (error) {
+    console.error('[PITCH] Error for user', req.userId, ':', error);
+    return safeError(res, 500, 'Erreur lors de la génération du pitch', error);
+  }
 });
 
 app.post('/api/saved-searches', verifyToken, async (req, res) => {

@@ -26,18 +26,35 @@ console.log('✓ Firebase app initialized');
 
 // Get Firebase services
 const auth = firebase.auth();
-const db = firebase.firestore();
-const storage = firebase.storage();
-console.log('✓ Firebase services initialized (auth, db, storage)');
+let db = null;
+const storage = (firebase.storage) ? firebase.storage() : null;
+console.log('✓ Firebase services initialized (auth, storage)');
 
-// Enable persistence
-db.enablePersistence().catch((error) => {
-  if (error.code === 'failed-precondition') {
-    console.warn('⚠️ Multiple tabs open, persistence disabled');
-  } else if (error.code === 'unimplemented') {
-    console.warn('⚠️ Browser does not support persistence');
+// Prefer modern persistence API (persistentLocalCache) when available
+try {
+  if (typeof firebase.initializeFirestore === 'function' && typeof firebase.persistentLocalCache === 'function') {
+    db = firebase.initializeFirestore(app, {
+      cache: firebase.persistentLocalCache({
+        tabManager: (typeof firebase.persistentMultipleTabManager === 'function') ? firebase.persistentMultipleTabManager() : undefined
+      })
+    });
+    console.log('✓ Firestore initialized with persistentLocalCache (multi-tab)');
+  } else {
+    db = firebase.firestore();
+    if (db && typeof db.enablePersistence === 'function') {
+      db.enablePersistence({ synchronizeTabs: true }).catch((error) => {
+        if (error.code === 'failed-precondition') {
+          console.warn('⚠️ Multiple tabs open, persistence disabled');
+        } else if (error.code === 'unimplemented') {
+          console.warn('⚠️ Browser does not support persistence');
+        }
+      });
+    }
   }
-});
+} catch (e) {
+  console.warn('⚠️ Firestore persistence init failed, falling back to default. ' + (e && e.message));
+  try { db = db || firebase.firestore(); } catch (er) { console.warn('Unable to initialize firestore:', er && er.message); }
+}
 
 // Set auth language
 auth.languageCode = 'fr';

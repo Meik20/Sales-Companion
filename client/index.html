@@ -1016,7 +1016,14 @@ function renderResults(data){
     const id=`co-${Date.now()}-${i}`;
     const initials=(co.raison_sociale||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
     const mapQ=encodeURIComponent(`${co.raison_sociale||''} ${co.ville||''} Cameroun`);
-    const mapSrc=`https://maps.google.com/maps?q=${mapQ}&output=embed&z=15`;
+    const mapsKey = (window.MAPS_EMBED_API_KEY || '').trim();
+    let mapSrc = '';
+    if (mapsKey) {
+      mapSrc = `https://www.google.com/maps/embed/v1/search?key=${encodeURIComponent(mapsKey)}&q=${mapQ}&zoom=15`;
+    } else {
+      mapSrc = `https://maps.google.com/maps?q=${mapQ}&output=embed&z=15`;
+      console.warn('MAPS_EMBED_API_KEY not set — using legacy maps embed URL');
+    }
     const card=document.createElement('div');
     card.className='co-card';
     const phone = co.telephone || co.tel || co.company_phone || co.contact_phone || '';

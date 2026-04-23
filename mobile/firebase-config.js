@@ -18,19 +18,36 @@ try {
   console.log('✓ Firebase app initialized');
 
   const auth = firebase.auth(app);
-  const db = firebase.firestore(app);
-  const storage = firebase.storage(app);
+  let db = null;
+  const storage = (firebase.storage) ? firebase.storage(app) : null;
 
   console.log('✓ Services initialized');
 
-  // Persistence offline
-  db.enablePersistence().catch((error) => {
-    if (error.code === 'failed-precondition') {
-      console.info('⚠️ Multiple tabs ouvertes');
-    } else if (error.code === 'unimplemented') {
-      console.warn('⚠️ Navigateur non supporté');
+  // Modern persistence: prefer persistentLocalCache when available
+  try {
+    if (typeof firebase.initializeFirestore === 'function' && typeof firebase.persistentLocalCache === 'function') {
+      db = firebase.initializeFirestore(app, {
+        cache: firebase.persistentLocalCache({
+          tabManager: (typeof firebase.persistentMultipleTabManager === 'function') ? firebase.persistentMultipleTabManager() : undefined
+        })
+      });
+      console.log('✓ Firestore initialized with persistentLocalCache (multi-tab)');
+    } else {
+      db = firebase.firestore(app);
+      if (db && typeof db.enablePersistence === 'function') {
+        db.enablePersistence({ synchronizeTabs: true }).catch((error) => {
+          if (error.code === 'failed-precondition') {
+            console.info('⚠️ Multiple tabs ouvertes');
+          } else if (error.code === 'unimplemented') {
+            console.warn('⚠️ Navigateur non supporté');
+          }
+        });
+      }
     }
-  });
+  } catch (e) {
+    console.warn('⚠️ Persistence init failed:', e && e.message);
+    try { db = db || firebase.firestore(app); } catch (er) { console.warn('Unable to init firestore', er && er.message); }
+  }
 
   auth.languageCode = 'fr';
 
@@ -40,6 +57,10 @@ try {
   window.storage = storage;
 
   console.log('✓ Firebase ready');
+
+  // Maps Embed API key (set in environment or before loading the script)
+  // Example: window.MAPS_EMBED_API_KEY = 'YOUR_KEY';
+  if (typeof window.MAPS_EMBED_API_KEY === 'undefined') window.MAPS_EMBED_API_KEY = '';
 
 } catch (error) {
   console.error('❌ Firebase init error:', error);

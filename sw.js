@@ -77,10 +77,18 @@ self.addEventListener('fetch', (event) => {
 // 🌍 Requêtes externes (CDN, Firebase, etc.)
 function handleExternal(event) {
   event.respondWith(
-    fetch(event.request).catch((err) => {
-      console.warn('[SW] External failed:', event.request.url);
-      return new Response('', { status: 204 });
-    })
+    fetch(event.request)
+      .then(function(response) {
+        if (!response || response.status !== 200 || response.type === 'error') return response;
+        return response;
+      })
+      .catch((err) => {
+        console.warn('[SW] External failed:', event.request.url, err);
+        return new Response('', {
+          status: 408,
+          statusText: 'Network error (CSP or offline)'
+        });
+      })
   );
 }
 
@@ -134,9 +142,9 @@ function handleStatic(event) {
           return res;
         })
         .catch(() => {
-          return new Response('Offline', {
-            status: 503,
-            headers: { 'Content-Type': 'text/plain' },
+          return new Response('', {
+            status: 408,
+            statusText: 'Network error (CSP or offline)'
           });
         });
     })

@@ -1060,7 +1060,15 @@ function openMyLocationMap() {
   navigator.geolocation.getCurrentPosition(function(pos) {
     var frame = document.getElementById('map-frame');
     var lat = pos.coords.latitude.toFixed(5), lon = pos.coords.longitude.toFixed(5);
-    if (frame) frame.src = 'https://maps.google.com/maps?q=' + lat + ',' + lon + '&z=15&output=embed';
+    if (frame) {
+      var mapsKey = (window.MAPS_EMBED_API_KEY || '').trim();
+      if (mapsKey) {
+        frame.src = 'https://www.google.com/maps/embed/v1/search?key=' + encodeURIComponent(mapsKey) + '&q=' + encodeURIComponent(lat + ',' + lon) + '&zoom=15';
+      } else {
+        frame.src = 'https://maps.google.com/maps?q=' + lat + ',' + lon + '&z=15&output=embed';
+        console.warn('MAPS_EMBED_API_KEY not set — using legacy maps embed URL');
+      }
+    }
     document.getElementById('map-caption').textContent = 'Vous etes ici : ' + lat + ', ' + lon;
     openSheet('map-sheet');
   }, function(err) { toast('Erreur de localisation : ' + err.message); }, { enableHighAccuracy: true, timeout: 10000 });
@@ -1081,7 +1089,16 @@ async function openProspectsAroundMe() {
     sub.textContent = lat + ', ' + lon;
     aiEl.textContent = 'Chargement des recommandations IA...';
     list.innerHTML = '';
-    if (iframe) iframe.src = 'https://maps.google.com/maps?q=entreprises+autour+de+' + lat + ',' + lon + '+dans+un+rayon+de+' + radius + '+km&z=12&output=embed';
+    if (iframe) {
+      var mapsKey2 = (window.MAPS_EMBED_API_KEY || '').trim();
+      var searchQ = 'entreprises autour de ' + lat + ',' + lon + ' dans un rayon de ' + radius + ' km';
+      if (mapsKey2) {
+        iframe.src = 'https://www.google.com/maps/embed/v1/search?key=' + encodeURIComponent(mapsKey2) + '&q=' + encodeURIComponent(searchQ) + '&zoom=12';
+      } else {
+        iframe.src = 'https://maps.google.com/maps?q=entreprises+autour+de+' + lat + ',' + lon + '+dans+un+rayon+de+' + radius + '+km&z=12&output=embed';
+        console.warn('MAPS_EMBED_API_KEY not set — using legacy maps embed URL');
+      }
+    }
     openSheet('prospect-map-sheet');
     try {
       var r = await api('POST', '/api/search', { query: 'Prospects autour de moi dans un rayon de ' + radius + ' km', filters: { around_me: { lat: lat, lon: lon, radius: radius } }, use_ai: true }, token);
@@ -1716,7 +1733,14 @@ function toggleMapM(id, query) {
   p.classList.toggle('open');
   if (!wasOpen && query) {
     var iframe = p.querySelector('iframe');
-    if (iframe && !iframe.src) iframe.src = 'https://maps.google.com/maps?q=' + query + '&output=embed&z=15';
+    if (iframe && !iframe.src) {
+      var mapsKey3 = (window.MAPS_EMBED_API_KEY || '').trim();
+      if (mapsKey3) iframe.src = 'https://www.google.com/maps/embed/v1/search?key=' + encodeURIComponent(mapsKey3) + '&q=' + encodeURIComponent(query) + '&zoom=15';
+      else {
+        iframe.src = 'https://maps.google.com/maps?q=' + query + '&output=embed&z=15';
+        console.warn('MAPS_EMBED_API_KEY not set — using legacy maps embed URL');
+      }
+    }
   }
 }
 

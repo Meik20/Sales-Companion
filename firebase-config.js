@@ -27,20 +27,41 @@ try {
 
   // Get Firebase services
   const auth = firebase.auth();
-  const db = firebase.firestore();
-  const storage = firebase.storage();
-  console.log('✓ Firebase services initialized (auth, db, storage)');
+  let db = null;
+  const storage = firebase.storage ? firebase.storage() : null;
 
-  // Enable persistence
-  db.enablePersistence().catch((error) => {
-    if (error.code === 'failed-precondition') {
-      console.warn('⚠️ Multiple tabs open, persistence disabled');
-    } else if (error.code === 'unimplemented') {
-      console.warn('⚠️ Browser does not support persistence');
+  // Prefer the modern persistence API when available (supports multi-tab natively)
+  try {
+    if (typeof firebase.initializeFirestore === 'function' && typeof firebase.persistentLocalCache === 'function') {
+      // If the modular APIs are exposed on the firebase global, use them
+      db = firebase.initializeFirestore(app, {
+        cache: firebase.persistentLocalCache({
+          tabManager: (typeof firebase.persistentMultipleTabManager === 'function') ? firebase.persistentMultipleTabManager() : undefined
+        })
+      });
+      console.log('✓ Firestore initialized with persistentLocalCache (multi-tab)');
     } else {
-      console.warn('⚠️ Persistence error:', error.message);
+      // Fallback to compat / older API
+      db = firebase.firestore();
+      if (db && typeof db.enablePersistence === 'function') {
+        // Try to enable multi-tab persistence where supported
+        db.enablePersistence({ synchronizeTabs: true }).then(function() {
+          console.log('✓ Persistence enabled (synchronizeTabs:true)');
+        }).catch((error) => {
+          if (error.code === 'failed-precondition') {
+            console.warn('⚠️ Multiple tabs open, persistence disabled');
+          } else if (error.code === 'unimplemented') {
+            console.warn('⚠️ Browser does not support persistence');
+          } else {
+            console.warn('⚠️ Persistence error:', error.message);
+          }
+        });
+      }
     }
-  });
+  } catch (err) {
+    console.warn('⚠️ Firestore persistence initialization failed, falling back to default. ' + (err && err.message));
+    try { db = db || firebase.firestore(); } catch (e) { console.warn('Unable to initialize firestore:', e && e.message); }
+  }
 
   // Set auth language
   auth.languageCode = 'fr';

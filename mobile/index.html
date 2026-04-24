@@ -459,6 +459,8 @@ body {
   display: block;
   max-width: 200px;
   max-height: 160px;
+  overflow: hidden !important;
+  border: 1px solid rgba(0,0,0,0.05);
 }
 .empty-state h2{font-size:20px;font-weight:800;color:var(--text-primary);margin-bottom:8px;letter-spacing:-0.4px}
 .empty-state p{font-size:14px;color:var(--text-tertiary);line-height:1.6;max-width:280px;margin-bottom:8px}
@@ -880,7 +882,7 @@ body {
       <div class="empty-state">
         <!-- Custom SVG illustration: businessman with network -->
         <div class="empty-illustration">
-          <svg viewBox="0 0 200 160" width="200" height="160" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <svg viewBox="0 0 200 160" width="200" height="160" fill="none" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" style="overflow:hidden">
             <!-- Map of Cameroon (simplified) -->
             <path d="M85 20 L95 15 L110 18 L120 25 L125 40 L130 55 L128 70 L132 85 L125 100 L120 115 L110 125 L100 130 L90 128 L80 120 L75 110 L70 95 L68 80 L72 65 L75 50 L78 35 Z" fill="#E8F5E9" stroke="#1B5E20" stroke-width="1.5" opacity="0.6"/>
             <!-- Network dots -->

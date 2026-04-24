@@ -113,13 +113,9 @@ function fetchSafe(request) {
 function handleExternal(event) {
   event.respondWith(
     fetchSafe(event.request).then((response) => {
-      // Ne pas mettre en cache les réponses opaques (cross-origin)
-      if (
-        !response ||
-        response.status !== 200 ||
-        response.type === 'opaque' ||
-        response.type === 'error'
-      ) {
+      // Ne pas considérer les réponses opaques comme des échecs :
+      // les ressources cross-origin (ex: Google Fonts) peuvent être de type 'opaque'
+      if (!response || response.status !== 200) {
         return response;
       }
       return response;

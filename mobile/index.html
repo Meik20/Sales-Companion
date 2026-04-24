@@ -473,7 +473,7 @@ body {
 }
 
 /* Force SVG sizing globally */
-svg:not(.fchip svg):not(.qcard-icon-wrap svg) { max-width: 100%; height: auto; }
+svg { display: inline-block; overflow: visible; }
 svg[viewBox] { max-width: 100%; }
 
 .empty-state h2{font-size:20px;font-weight:800;color:var(--text-primary);margin-bottom:8px;letter-spacing:-0.4px}

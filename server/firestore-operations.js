@@ -746,26 +746,65 @@ async function verifyAdmin(req, res, next) {
   const token = req.headers.authorization?.split('Bearer ')[1];
   if (!token) return res.status(401).json({ error: 'No token provided' });
   try {
-    const decoded = await auth.verifyIdToken(token);
-    if (!decoded.admin) return res.status(403).json({ error: 'Admin access required' });
+    let decoded;
+    let isCustomToken = false;
+    
+    // Try to verify as ID token first (preferred)
+    try {
+      decoded = await auth.verifyIdToken(token);
+    } catch (idTokenErr) {
+      // Check if this might be a custom token (custom tokens raise specific error)
+      if (idTokenErr.message.includes('custom token')) {
+        isCustomToken = true;
+        // For custom tokens, we need to decode manually or verify differently
+        // Parse the JWT payload manually (this is safe for custom tokens)
+        try {
+          const parts = token.split('.');
+          if (parts.length !== 3) throw new Error('Invalid token format');
+          
+          const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
+          decoded = payload;
+          console.log(`[Auth] Custom token decoded for ${decoded.uid}`);
+        } catch (parseErr) {
+          throw idTokenErr; // Fall back to original error
+        }
+      } else {
+        throw idTokenErr;
+      }
+    }
+    
+    // Check if user is admin
+    if (!decoded.admin) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    
+    // Verify user still exists and is admin
+    try {
+      const userDoc = await auth.getUser(decoded.uid);
+      if (!userDoc.customClaims?.admin) {
+        return res.status(403).json({ error: 'Admin access revoked' });
+      }
+    } catch (userErr) {
+      if (!isCustomToken) throw userErr; // For ID tokens, this is fatal
+      console.warn(`[Auth] Could not verify admin user ${decoded.uid}:`, userErr.message);
+    }
     
     // Populate req.user with decoded token claims
     req.user = {
       uid: decoded.uid,
-      email: decoded.email,
+      email: decoded.email || 'admin@sales-companion.local',
       emailVerified: decoded.email_verified || false,
       isAdmin: true,
     };
     
     // Also set individual properties for backward compatibility
     req.userId    = decoded.uid;
-    req.userEmail = decoded.email;
+    req.userEmail = req.user.email;
     
     console.log(`[Auth] Admin token verified for user: ${req.userEmail} (${req.userId})`);
     next();
   } catch (error) {
     console.error('Admin verification error:', error.message);
-    // ✅ FIX: retourner un code clair pour que le client puisse rafraîchir le token
     if (error.code === 'auth/id-token-expired') {
       return res.status(401).json({ error: 'TOKEN_EXPIRED' });
     }

@@ -29,6 +29,7 @@ const {
   createUser,
   getUser,
   updateUserPlan,
+  updateUserRole,
   getTeamMembers,
   searchCompanies,
   importCompaniesBatch,
@@ -344,6 +345,7 @@ app.post('/auth/login', authLimiter, async (req, res) => {
         name: user?.name || email.split('@')[0], plan: user?.plan || 'free',
         daily_limit: user?.daily_limit || 10, daily_used: user?.daily_used || 0,
         remaining: (user?.daily_limit || 10) - (user?.daily_used || 0),
+        role: user?.role || 'independent',
       },
     });
   } catch (error) {
@@ -366,6 +368,7 @@ app.get('/auth/me', verifyToken, async (req, res) => {
         dailyUsed:   0,
         remaining:   10,
         active:      true,
+        role:        'independent',
       });
     }
     
@@ -381,6 +384,7 @@ app.get('/auth/me', verifyToken, async (req, res) => {
       dailyUsed:  0,
       remaining:  10,
       active:     true,
+      role:       'independent',
     });
   }
 });
@@ -885,6 +889,23 @@ app.post('/admin/users/:uid/plan', verifyAdmin, async (req, res) => {
     res.json({ message: `User plan updated to ${plan}` });
   } catch (error) {
     return safeError(res, 500, 'Erreur de mise à jour du plan', error);
+  }
+});
+
+app.post('/admin/users/:uid/role', verifyAdmin, async (req, res) => {
+  try {
+    const { role } = req.body;
+    if (!role) return res.status(400).json({ error: 'Role required' });
+    const validRoles = ['user', 'manager', 'admin', 'independent'];
+    if (!validRoles.includes(role)) {
+      return res.status(400).json({ error: `Invalid role. Must be one of: ${validRoles.join(', ')}` });
+    }
+    await updateUserRole(req.params.uid, role);
+    // ✅ INVALIDATE CACHE after update
+    cache.delete('admin:stats');
+    res.json({ message: `User role updated to ${role}` });
+  } catch (error) {
+    return safeError(res, 500, 'Erreur de mise à jour du rôle', error);
   }
 });
 

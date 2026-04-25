@@ -17,38 +17,38 @@
 
 :root{
   /* ═══ BRAND ═══ */
-  --g:#1B7A3E;
-  --gl:#e8f5ee;
-  --gm:#2ea05a;
-  --gd:#145f2f;
+  --g:#2E7D32;
+  --gl:#E8F5E9;
+  --gm:#43A047;
+  --gd:#1B5E20;
   --accent:#00897B;
-  --accent-l:#e0f2f1;
+  --accent-l:#E0F2F1;
 
   /* ═══ BACKGROUNDS ═══ */
-  --bg:#f0f2f5;
-  --bg2:#ffffff;
+  --bg:#F5F7FA;
+  --bg2:#FFFFFF;
   --bg3:#F5F5F0;
-  --bg4:#f8f9fa;
+  --bg4:#FAFBFC;
 
   /* ═══ BORDERS ═══ */
-  --bd:rgba(0,0,0,0.07);
-  --bd2:rgba(0,0,0,0.13);
+  --bd:rgba(0,0,0,0.06);
+  --bd2:rgba(0,0,0,0.12);
 
   /* ═══ TEXT ═══ */
-  --tx:#1a1a1a;
+  --tx:#1A1A2E;
   --tx2:#4A4A4A;
-  --tx3:#888;
+  --tx3:#9CA3AF;
 
   /* ═══ SEMANTIC ═══ */
   --error:#E53935;
-  --warning:#FDD835;
+  --warning:#FB8C00;
   --success:#43A047;
   --info:#1E88E5;
 
   /* ═══ LEGACY ═══ */
   --blue:#1a73e8;--bl:#e8f0fe;
   --red:#E53935;--rl:#fdf0ef;
-  --gold:#f39c12;--gdl:#fef9ec;
+  --gold:#F9A825;--gdl:#fef9ec;
 
   /* ═══ UI TOKENS ═══ */
   --r:8px;
@@ -1018,20 +1018,16 @@ body{
   </div>
   <div class="tb-divider"></div>
   <div class="tb-right">
-    <div class="tb-rem">
-      <span id="tb-status-name" style="font-weight:500;color:rgba(255,255,255,.9)">—</span>
-      <span class="plan-b" id="tb-status-plan">FREE</span>
-    </div>
+    <button id="tb-team-btn" class="tb-tab-btn" onclick="switchToTeamTab()" style="display:none;background:transparent;border:none;color:rgba(255,255,255,0.9);font-size:13px;padding:8px 12px;cursor:pointer;transition:all 300ms;margin-right:8px">
+      👥 Équipe
+    </button>
     <button id="manager-assign-btn" class="ct-btn" 
       style="margin-left:4px;padding:6px 12px;font-size:11.5px;display:none" 
       onclick="openManagerAssignModal()">
       🗂️ Créer assignation
     </button>
-    <div class="tb-user" onclick="openProfile()">
-      <svg viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.8)" stroke-width="2" width="14" height="14">
-        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-        <circle cx="12" cy="7" r="4"/>
-      </svg>
+    <div class="tb-user" onclick="openProfile()" style="cursor:pointer;display:flex;align-items:center;gap:8px">
+      <div class="tb-avatar" id="tb-avatar" style="width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:rgba(255,255,255,0.9)">—</div>
       <span class="tb-uname">Mon compte</span>
     </div>
   </div>
@@ -1405,10 +1401,15 @@ body{
   </div>
   
   <!-- Tabs -->
-  <div style="padding:12px 20px;border-bottom:1px solid var(--bd);display:flex;gap:4px">
-    <button class="tseg active" onclick="switchTeamSeg('members', this)" style="padding:8px 16px;font-size:13px;background:transparent;border:none;border-bottom:2px solid transparent;cursor:pointer;color:var(--tx3);transition:all 300ms" onmouseover="this.style.color='var(--tx)'" onmouseout="this.style.color='var(--tx3)'">👥 Membres</button>
-    <button class="tseg" onclick="switchTeamSeg('activity', this)" style="padding:8px 16px;font-size:13px;background:transparent;border:none;border-bottom:2px solid transparent;cursor:pointer;color:var(--tx3);transition:all 300ms" onmouseover="this.style.color='var(--tx)'" onmouseout="this.style.color='var(--tx3)'">⚡ Activité</button>
-    <button class="tseg" onclick="switchTeamSeg('access', this)" style="padding:8px 16px;font-size:13px;background:transparent;border:none;border-bottom:2px solid transparent;cursor:pointer;color:var(--tx3);transition:all 300ms" onmouseover="this.style.color='var(--tx)'" onmouseout="this.style.color='var(--tx3)'">🔑 Accès</button>
+  <div style="padding:12px 20px;border-bottom:1px solid var(--bd);display:flex;gap:4px;align-items:center;justify-content:space-between">
+    <div style="display:flex;gap:4px">
+      <button class="tseg active" onclick="switchTeamSeg('members', this)" style="padding:8px 16px;font-size:13px;background:transparent;border:none;border-bottom:2px solid transparent;cursor:pointer;color:var(--tx3);transition:all 300ms" onmouseover="this.style.color='var(--tx)'" onmouseout="this.style.color='var(--tx3)'">👥 Membres</button>
+      <button class="tseg" onclick="switchTeamSeg('activity', this)" style="padding:8px 16px;font-size:13px;background:transparent;border:none;border-bottom:2px solid transparent;cursor:pointer;color:var(--tx3);transition:all 300ms" onmouseover="this.style.color='var(--tx)'" onmouseout="this.style.color='var(--tx3)'">⚡ Activité</button>
+      <button class="tseg" onclick="switchTeamSeg('access', this)" style="padding:8px 16px;font-size:13px;background:transparent;border:none;border-bottom:2px solid transparent;cursor:pointer;color:var(--tx3);transition:all 300ms" onmouseover="this.style.color='var(--tx)'" onmouseout="this.style.color='var(--tx3)'">🔑 Accès</button>
+    </div>
+    <button id="create-access-btn-header" class="btn-primary" onclick="openCreateAccessSheet()" style="display:none;padding:6px 12px;font-size:12px;margin-right:8px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;margin-right:4px;display:inline"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Créer accès
+    </button>
   </div>
   
   <!-- Content -->
@@ -2204,6 +2205,7 @@ async function doLogin(){
     localStorage.setItem('authToken',token);
     await window.electronAPI.saveToken(token);
     await window.electronAPI.saveServerUrl(RAILWAY_SERVER);
+    console.log('[Login] Utilisateur connecté:', {name: user.name, role: user.role, email: user.email});
     showApp();
   }catch(e){
     err.textContent=e.message||'Erreur de connexion';err.style.display='block';
@@ -2249,17 +2251,20 @@ function showApp(){
   document.getElementById('titlebar').style.display='flex';
   document.getElementById('layout').style.display='flex';
   if(user){
-    document.getElementById('tb-status-name').textContent=user.name;
-    const pb=document.getElementById('tb-status-plan');
-    const pmap={free:'pf',starter:'ps_',pro:'pp',enterprise:'pe'};
-    pb.textContent=user.plan?.toUpperCase()||'FREE';
-    pb.className=`plan-b ${pmap[user.plan]||'pf'}`;
     const isPro=['pro','enterprise'].includes(user.plan);
     document.getElementById('add-city-btn').style.display=isPro?'block':'none';
     try{
       const mbtn=document.getElementById('manager-assign-btn');
       if(mbtn) mbtn.style.display=(user.role==='manager')?'inline-flex':'none';
     }catch(e){}
+    // Apply manager role UI and preload team data
+    try {
+      if(typeof applyManagerRole === 'function') applyManagerRole();
+      // Preload team data for managers
+      if(user.role === 'manager' && typeof refreshTeamData === 'function') {
+        setTimeout(function() { refreshTeamData(); }, 500);
+      }
+    } catch(e) {}
     refreshRemaining();
     loadSavedSearches();
     loadPipeline();
@@ -2278,10 +2283,12 @@ async function refreshRemaining(){
     const r=await window.electronAPI.getMe({token,serverUrl:RAILWAY_SERVER});
     if(r.status===200){
       user=r.data;
-      document.getElementById('tb-status-name').textContent=user.name||'Utilisateur';
-      const planEl=document.getElementById('tb-status-plan');
-      planEl.textContent=user.plan?.toUpperCase()||'FREE';
-      planEl.className='plan-b '+(user.plan==='pro'?'pp':user.plan==='enterprise'?'pe':'pf');
+      // Update avatar in header
+      const avatar=document.getElementById('tb-avatar');
+      if(avatar){
+        const initials=(user.name||user.email||'?').split(' ').slice(0,2).map(function(p){ return p[0].toUpperCase(); }).join('');
+        avatar.textContent=initials||'U';
+      }
     }
   }catch(e){
     if(e.message.includes('expiré')||e.message.includes('401')) doLogout();

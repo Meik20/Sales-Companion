@@ -60,6 +60,28 @@ async function updateUserPlan(uid, newPlan) {
     throw error;
   }
 }
+
+/**
+ * Update user role (admin only)
+ * Valid roles: 'user', 'manager', 'admin', 'independent'
+ */
+async function updateUserRole(uid, newRole) {
+  const validRoles = ['user', 'manager', 'admin', 'independent'];
+  if (!validRoles.includes(newRole)) {
+    throw new Error(`Invalid role. Must be one of: ${validRoles.join(', ')}`);
+  }
+  try {
+    await db.collection('users').doc(uid).update({
+      role: newRole,
+      updatedAt: new Date().toISOString(),
+    });
+    console.log(`[Role Update] User ${uid} role updated to: ${newRole}`);
+    return true;
+  } catch (error) {
+    console.error('Error updating user role:', error);
+    throw error;
+  }
+}
  
 function normalizeInt(value) {
   const n = Number(String(value || '').replace(/[^0-9]/g, ''));
@@ -718,19 +740,30 @@ async function verifyToken(req, res, next) {
   try {
     const decoded = await auth.verifyIdToken(token);
     
-    // Populate req.user with decoded token claims
+    // Fetch user's full profile from Firestore to get role and other properties
+    let userDoc = null;
+    try {
+      userDoc = await getUser(decoded.uid);
+    } catch (docError) {
+      console.warn(`[Auth] Could not fetch user document for ${decoded.uid}:`, docError.message);
+      // Continue without user doc - use default user object
+    }
+    
+    // Populate req.user with decoded token claims and Firestore data
     req.user = {
       uid: decoded.uid,
       email: decoded.email,
       emailVerified: decoded.email_verified || false,
       isAdmin: decoded.admin === true,
+      role: userDoc?.role || 'user', // Get role from Firestore, default to 'user'
+      ...userDoc, // Include all other fields from Firestore document
     };
     
     // Also set individual properties for backward compatibility
     req.userId    = decoded.uid;
     req.userEmail = decoded.email;
     
-    console.log(`[Auth] Token verified for user: ${req.userEmail} (${req.userId})`);
+    console.log(`[Auth] Token verified for user: ${req.userEmail} (${req.userId}) - Role: ${req.user.role}`);
     next();
   } catch (error) {
     console.error('Token verification error:', error.message);
@@ -1031,7 +1064,7 @@ async function findTeamAccess(accessId) {
 
  
 module.exports = {
-  createUser, getUser, updateUserPlan, setAdminClaims,
+  createUser, getUser, updateUserPlan, updateUserRole, setAdminClaims,
   addCompany, searchCompanies, importCompaniesBatch,
   setConfig, getConfig,
   addPipelineProspect, getUserPipeline, updatePipelineProspect, deletePipelineProspect, checkCompanyInPipeline,

@@ -814,6 +814,210 @@ async function verifyAdmin(req, res, next) {
     return res.status(401).json({ error: 'Invalid or expired token' });
   }
 }
+
+// ── TEAM ACCESSES (Member Access Generation & Activation) ──────
+/**
+ * Créer un accès pour un membre d'équipe
+ * - max 10 accès par manager
+ * - format: Prénom/Nom@Entreprise
+ */
+async function createTeamAccess(managerId, accessData) {
+  try {
+    if (!accessData.access_id || !accessData.member_name) {
+      throw new Error('access_id and member_name required');
+    }
+
+    // Vérifier le manager existe et est bien manager
+    const mgrDoc = await db.collection('users').doc(managerId).get();
+    if (!mgrDoc.exists) throw new Error('Manager not found');
+    if (mgrDoc.data().role !== 'manager') throw new Error('User is not a manager');
+
+    // Vérifier le quota (max 10)
+    const activeAccesses = await db.collection('team_accesses')
+      .where('manager_uid', '==', managerId)
+      .where('status', '==', 'pending')
+      .get();
+    if (activeAccesses.size >= 10) {
+      throw new Error('Maximum 10 pending accesses allowed');
+    }
+
+    // Vérifier que l'accès n'existe pas déjà
+    const existing = await db.collection('team_accesses')
+      .where('access_id', '==', accessData.access_id)
+      .limit(1)
+      .get();
+    if (!existing.empty) {
+      throw new Error('Access ID already exists');
+    }
+
+    // Créer l'accès
+    const accessRef = db.collection('team_accesses').doc();
+    await accessRef.set({
+      id: accessRef.id,
+      access_id: accessData.access_id,
+      member_name: accessData.member_name,
+      manager_uid: managerId,
+      company_name: accessData.company_name || '',
+      status: 'pending', // pending -> active (after activation)
+      created_at: new Date().toISOString(),
+      activated_at: null,
+      activated_by: null,
+      revoked_at: null,
+      password_hash: null, // Sera défini à l'activation
+    });
+
+    return {
+      id: accessRef.id,
+      access_id: accessData.access_id,
+      member_name: accessData.member_name,
+      manager_uid: managerId,
+      status: 'pending',
+      created_at: new Date().toISOString(),
+    };
+  } catch (error) {
+    console.error('Error creating team access:', error.message);
+    throw error;
+  }
+}
+
+/**
+ * Lister les accès générés pour un manager
+ */
+async function getTeamAccesses(managerId, limit = 100) {
+  try {
+    const snapshot = await db.collection('team_accesses')
+      .where('manager_uid', '==', managerId)
+      .orderBy('created_at', 'desc')
+      .limit(parseInt(limit, 10) || 100)
+      .get();
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  } catch (error) {
+    console.error('Error getting team accesses:', error.message);
+    throw error;
+  }
+}
+
+/**
+ * Révoquer un accès
+ */
+async function revokeTeamAccess(accessId) {
+  try {
+    const ref = db.collection('team_accesses').doc(accessId);
+    const doc = await ref.get();
+    if (!doc.exists) throw new Error('Access not found');
+
+    await ref.update({
+      status: 'revoked',
+      revoked_at: new Date().toISOString(),
+    });
+
+    return { id: accessId, status: 'revoked' };
+  } catch (error) {
+    console.error('Error revoking team access:', error.message);
+    throw error;
+  }
+}
+
+/**
+ * Activer un accès membre (première connexion)
+ * - Vérifier l'accès existe et est en statut "pending"
+ * - Créer l'utilisateur Firebase avec mot de passe
+ * - Lier l'utilisateur au manager
+ * - Marquer l'accès comme "active"
+ */
+async function activateTeamAccess(accessId, newPassword) {
+  try {
+    if (!newPassword || newPassword.length < 8) {
+      throw new Error('Password must be at least 8 characters');
+    }
+
+    // Récupérer l'accès
+    const accessRef = db.collection('team_accesses').doc(accessId);
+    const accessDoc = await accessRef.get();
+    if (!accessDoc.exists) throw new Error('Access ID not found');
+
+    const access = accessDoc.data();
+    if (access.status !== 'pending') {
+      throw new Error('Access is not available for activation');
+    }
+
+    // Créer l'utilisateur Firebase
+    const email = access.access_id.toLowerCase() + '@temp.local'; // Générer email temporaire
+    let firebaseUser = null;
+
+    try {
+      firebaseUser = await auth.createUser({
+        email,
+        password: newPassword,
+        displayName: access.member_name,
+      });
+
+      // Créer le document Firestore pour l'utilisateur
+      await db.collection('users').doc(firebaseUser.uid).set({
+        uid: firebaseUser.uid,
+        email,
+        name: access.member_name,
+        role: 'independent', // Par défaut
+        manager_uid: access.manager_uid,
+        company_name: access.company_name,
+        access_id: access.access_id,
+        plan: 'free',
+        dailyLimit: 10,
+        dailyUsed: 0,
+        lastReset: new Date().toISOString(),
+        active: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+
+      // Marquer l'accès comme actif
+      await accessRef.update({
+        status: 'active',
+        activated_at: new Date().toISOString(),
+        activated_by: firebaseUser.uid,
+      });
+
+      return {
+        uid: firebaseUser.uid,
+        email,
+        name: access.member_name,
+        token: null, // Le token sera généré côté client
+      };
+    } catch (error) {
+      // Rollback si création Firebase échoue
+      if (firebaseUser?.uid) {
+        try {
+          await auth.deleteUser(firebaseUser.uid);
+        } catch (e) {
+          console.error('Rollback error:', e.message);
+        }
+      }
+      throw error;
+    }
+  } catch (error) {
+    console.error('Error activating team access:', error.message);
+    throw error;
+  }
+}
+
+/**
+ * Trouver un accès par son ID (pour vérification)
+ */
+async function findTeamAccess(accessId) {
+  try {
+    const snapshot = await db.collection('team_accesses')
+      .where('access_id', '==', accessId)
+      .limit(1)
+      .get();
+    if (snapshot.empty) return null;
+    const doc = snapshot.docs[0];
+    return { id: doc.id, ...doc.data() };
+  } catch (error) {
+    console.error('Error finding team access:', error.message);
+    return null;
+  }
+}
+
  
 module.exports = {
   createUser, getUser, updateUserPlan, setAdminClaims,
@@ -826,6 +1030,8 @@ module.exports = {
   // Assignments / team
   addAssignments, getAssignmentsForUser, getAssignmentsCreatedBy, updateAssignment,
   getTeamMembers,
+  // Team accesses
+  createTeamAccess, getTeamAccesses, revokeTeamAccess, activateTeamAccess, findTeamAccess,
   verifyToken, verifyAdmin,
 };
 

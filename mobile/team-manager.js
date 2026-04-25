@@ -3,16 +3,167 @@
    Nouvelles fonctionnalités :
    1. Génération jusqu'à 10 accès membres par Manager
    2. Comptes liés automatiquement au Manager
-   3. Activation par ID (format: PrénomNom@Entreprise)
+   3. Activation par ID (format: Prénom/Nom@Entreprise)
    4. Changement obligatoire du mot de passe à la première connexion
    ═══════════════════════════════════════════════════════════ */
+
+// Global variables for team manager (initialized early)
+if (typeof window.selectedForAssignMobile === 'undefined') {
+  window.selectedForAssignMobile = new Set();
+}
 
 var teamMembers = [];
 var teamMembersPipeline = {};
 var selectedAssigneeMobile = null;
 var currentTeamSeg = 'members';
 var activityFeed = [];
-var generatedAccesses = [];
+var generatedAccesses = []; // Stockage des accès générés
+
+/* ═══════════════════════════════════════════════════════════
+   HELPER FUNCTIONS FOR SHEETS/MODALS
+   ═══════════════════════════════════════════════════════════ */
+
+function openSheet(sheetId) {
+  var sheet = document.getElementById(sheetId);
+  if (sheet) sheet.classList.add('open');
+}
+
+function closeSheet(sheetId) {
+  var sheet = typeof sheetId === 'string' ? document.getElementById(sheetId) : sheetId;
+  if (sheet) sheet.classList.remove('open');
+}
+
+/* ═══════════════════════════════════════════════════════════
+   API WRAPPER FUNCTION
+   ═══════════════════════════════════════════════════════════ */
+
+async function api(method, endpoint, data, token) {
+  if (typeof RAILWAY_SERVER === 'undefined') {
+    console.error('RAILWAY_SERVER not defined');
+    throw new Error('Server not configured');
+  }
+  
+  var options = {
+    method: method || 'GET',
+    headers: {
+      'Content-Type': 'application/json'
+    }
+  };
+  
+  if (token) {
+    options.headers['Authorization'] = 'Bearer ' + token;
+  }
+  
+  if (data && (method === 'POST' || method === 'PUT')) {
+    options.body = JSON.stringify(data);
+  }
+  
+  return fetch(RAILWAY_SERVER + endpoint, options);
+}
+
+function switchToActivationFlow() {
+  // Afficher le formulaire d'activation ET masquer le login
+  var loginForm = document.getElementById('login-form');
+  var activationForm = document.getElementById('activation-form');
+  
+  if (loginForm) loginForm.style.display = 'none';
+  if (activationForm) {
+    activationForm.style.display = 'flex';
+  }
+  
+  // Réinitialiser les champs
+  var accessIdEl = document.getElementById('activation-access-id');
+  var passwordEl = document.getElementById('activation-new-password');
+  var confirmPasswordEl = document.getElementById('activation-confirm-password');
+  
+  if (accessIdEl) {
+    accessIdEl.value = '';
+    accessIdEl.focus();
+  }
+  if (passwordEl) passwordEl.value = '';
+  if (confirmPasswordEl) confirmPasswordEl.value = '';
+}
+
+function backToLoginForm() {
+  // Retour au formulaire de connexion classique
+  var loginForm = document.getElementById('login-form');
+  var activationForm = document.getElementById('activation-form');
+  
+  if (loginForm) loginForm.style.display = 'block';
+  if (activationForm) activationForm.style.display = 'none';
+  
+  // Réinitialiser les champs d'activation
+  var accessIdEl = document.getElementById('activation-access-id');
+  var passwordEl = document.getElementById('activation-new-password');
+  var confirmPasswordEl = document.getElementById('activation-confirm-password');
+  
+  if (accessIdEl) accessIdEl.value = '';
+  if (passwordEl) passwordEl.value = '';
+  if (confirmPasswordEl) confirmPasswordEl.value = '';
+}
+
+async function activateMemberAccess() {
+  var accessId = document.getElementById('activation-access-id').value.trim();
+  var newPassword = document.getElementById('activation-new-password').value;
+  var confirmPassword = document.getElementById('activation-confirm-password').value;
+  
+  if (!accessId) {
+    toast('Veuillez entrer votre ID d\'accès');
+    return;
+  }
+  
+  if (!newPassword || newPassword.length < 8) {
+    toast('Le mot de passe doit contenir au moins 8 caractères');
+    return;
+  }
+  
+  if (newPassword !== confirmPassword) {
+    toast('Les mots de passe ne correspondent pas');
+    return;
+  }
+  
+  var btn = document.getElementById('activate-access-btn');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Activation...';
+  }
+  
+  try {
+    var r = await api('POST', '/api/auth/activate-member', {
+      access_id: accessId,
+      new_password: newPassword
+    }, null);
+    
+    if (!r.ok) {
+      var err = await r.json().catch(function() { return { message: 'ID invalide ou déjà utilisé' }; });
+      throw new Error(err.message);
+    }
+    
+    var data = await r.json();
+    
+    // Sauvegarder le token et l'utilisateur
+    token = data.token;
+    user = data.user;
+    localStorage.setItem('sc_token', token);
+    localStorage.setItem('user', JSON.stringify(user));
+    
+    toast('🎉 Compte activé avec succès !');
+    
+    // Retarder l'affichage de l'app
+    setTimeout(function() {
+      if (window.showApp) {
+        showApp();
+      }
+    }, 1000);
+    
+  } catch(e) {
+    toast('Erreur: ' + e.message);
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Activer mon compte';
+    }
+  }
+}
 
 function applyManagerRole() {
   var isManager = user && user.role === 'manager';
@@ -139,11 +290,11 @@ function renderAccessManagement() {
     generatedAccesses.forEach(function(access) {
       var statusIcons = { pending: '&#x23F3;', active: '&#x2705;', revoked: '&#x274C;' };
       var statusLabels = { pending: 'En attente', active: 'Actif', revoked: 'Révoqué' };
-      var accessIdEsc = String(access.id).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      var accessId = access.access_id || String(access.id);
       
       html += '<div class="access-card ' + access.status + '">'
         + '<div class="access-card-header">'
-        + '<div class="access-card-id">' + access.access_id + '</div>'
+        + '<div class="access-card-id">' + accessId + '</div>'
         + '<div class="access-status-badge ' + access.status + '">'
         + statusIcons[access.status] + ' ' + statusLabels[access.status]
         + '</div>'
@@ -156,14 +307,14 @@ function renderAccessManagement() {
         + '<div class="access-card-actions">';
       
       if (access.status === 'pending') {
-        html += '<button class="access-btn copy" onclick="copyAccessId(\'' + access.access_id + '\')">'
+        html += '<button class="access-btn copy" onclick="copyAccessId(\'' + accessId.replace(/'/g, "\\'") + '\')">'
           + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'
-          + 'Copier'
+          + 'Copier l\'ID'
           + '</button>';
       }
       
       if (access.status !== 'revoked') {
-        html += '<button class="access-btn revoke" onclick="revokeAccess(\'' + accessIdEsc + '\')">'
+        html += '<button class="access-btn revoke" onclick="revokeAccess(\'' + accessId.replace(/'/g, "\\'") + '\')">'
           + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>'
           + 'Révoquer'
           + '</button>';
@@ -187,9 +338,18 @@ function openCreateAccessSheet() {
     return;
   }
   
-  document.getElementById('new-access-firstname').value = '';
-  document.getElementById('new-access-lastname').value = '';
-  document.getElementById('new-access-preview').textContent = '@' + (user.company_name || 'Entreprise');
+  var firstnameEl = document.getElementById('new-access-firstname');
+  var lastnameEl = document.getElementById('new-access-lastname');
+  var previewEl = document.getElementById('new-access-preview');
+  var createBtnEl = document.getElementById('create-access-btn');
+  
+  if (firstnameEl) firstnameEl.value = '';
+  if (lastnameEl) lastnameEl.value = '';
+  if (previewEl) previewEl.textContent = '@' + (user.company_name || 'Entreprise');
+  if (createBtnEl) {
+    createBtnEl.disabled = false;
+    createBtnEl.textContent = 'Créer l\'accès';
+  }
   
   openSheet('create-access-sheet');
 }
@@ -209,6 +369,21 @@ function updateAccessPreview() {
   document.getElementById('new-access-preview').textContent = preview;
 }
 
+function updateAccessPreview() {
+  var firstname = document.getElementById('new-access-firstname').value.trim();
+  var lastname = document.getElementById('new-access-lastname').value.trim();
+  var company = user.company_name || 'Entreprise';
+  
+  var preview = '';
+  if (firstname || lastname) {
+    preview = (firstname || 'Prénom') + '/' + (lastname || 'Nom') + '@' + company;
+  } else {
+    preview = '@' + company;
+  }
+  
+  document.getElementById('new-access-preview').textContent = preview;
+}
+
 async function submitCreateAccess() {
   var firstname = document.getElementById('new-access-firstname').value.trim();
   var lastname = document.getElementById('new-access-lastname').value.trim();
@@ -219,7 +394,7 @@ async function submitCreateAccess() {
   }
   
   var company = user.company_name || 'Entreprise';
-  var accessId = firstname + lastname + '@' + company;
+  var accessId = firstname + '/' + lastname + '@' + company;
   
   var btn = document.getElementById('create-access-btn');
   if (btn) {
@@ -229,11 +404,11 @@ async function submitCreateAccess() {
   
   try {
     var r = await api('POST', '/api/team/accesses', {
-        member_name: firstname + ' ' + lastname,
-        access_id: accessId,
-        manager_uid: user.uid,
-        company_name: company
-      }, token);
+      member_name: firstname + ' ' + lastname,
+      access_id: accessId,
+      manager_uid: user.uid,
+      company_name: company
+    }, token);
     
     if (!r.ok) {
       var err = await r.json().catch(function() { return { message: 'Erreur de création' }; });
@@ -247,6 +422,7 @@ async function submitCreateAccess() {
     await loadGeneratedAccesses();
     switchTeamSeg('access', document.querySelector('.tseg[onclick*="access"]'));
     
+    // Afficher l'ID copié automatiquement
     setTimeout(function() {
       copyAccessId(accessId);
     }, 500);
@@ -279,7 +455,9 @@ async function revokeAccess(accessId) {
   if (!confirm('Voulez-vous vraiment révoquer cet accès ?')) return;
   
   try {
-    var r = await api('PUT', '/api/team/accesses/' + accessId, { status: 'revoked' }, token);
+    var r = await api('PUT', '/api/team/accesses/' + encodeURIComponent(accessId), {
+      status: 'revoked'
+    }, token);
     
     if (!r.ok) throw new Error('Erreur de révocation');
     
@@ -302,64 +480,6 @@ function showMemberActivationFlow() {
   
   if (loginForm) loginForm.style.display = 'none';
   if (activationForm) activationForm.style.display = 'block';
-}
-
-async function activateMemberAccess() {
-  var accessId = document.getElementById('activation-access-id').value.trim();
-  var newPassword = document.getElementById('activation-new-password').value;
-  var confirmPassword = document.getElementById('activation-confirm-password').value;
-  
-  if (!accessId) {
-    toast('Veuillez entrer votre ID d\'accès');
-    return;
-  }
-  
-  if (!newPassword || newPassword.length < 8) {
-    toast('Le mot de passe doit contenir au moins 8 caractères');
-    return;
-  }
-  
-  if (newPassword !== confirmPassword) {
-    toast('Les mots de passe ne correspondent pas');
-    return;
-  }
-  
-  var btn = document.getElementById('activate-access-btn');
-  if (btn) {
-    btn.disabled = true;
-    btn.textContent = 'Activation...';
-  }
-  
-  try {
-    var r = await api('POST', '/api/auth/activate-member', {
-      access_id: accessId,
-      new_password: newPassword
-    }, null);
-    
-    if (!r.ok) {
-      var err = await r.json().catch(function() { return { message: 'ID invalide ou déjà utilisé' }; });
-      throw new Error(err.message);
-    }
-    
-    var data = await r.json();
-    
-    token = data.token;
-    user = data.user;
-    localStorage.setItem('sc_token', token);
-    
-    toast('🎉 Compte activé avec succès !');
-    
-    setTimeout(function() {
-      showApp();
-    }, 1000);
-    
-  } catch(e) {
-    toast('Erreur: ' + e.message);
-    if (btn) {
-      btn.disabled = false;
-      btn.textContent = 'Activer mon compte';
-    }
-  }
 }
 
 function formatDate(dateStr) {
@@ -499,18 +619,14 @@ document.addEventListener('DOMContentLoaded', function() {
   window.showApp = function() {
     _baseShowApp();
     applyManagerRole();
-    // Ne pas charger les données d'équipe automatiquement à l'ouverture de l'app
-    // Elles seront chargées seulement quand l'utilisateur navigue vers l'onglet ÉQUIPE
+    if (user && user.role === 'manager') setTimeout(loadTeamData, 1000);
   };
 
   var _baseSwitchTab2 = window.switchTab2;
   window.switchTab2 = function(name) {
     _baseSwitchTab2(name);
-    // Charger les données d'équipe uniquement quand on accède à l'onglet team
     if (name === 'team' && user && user.role === 'manager') {
-      if (!teamMembers.length) {
-        loadTeamData();
-      }
+      if (!teamMembers.length) loadTeamData();
     }
   };
 });

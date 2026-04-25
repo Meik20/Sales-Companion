@@ -46,6 +46,12 @@ const {
   getAssignmentsForUser,
   getAssignmentsCreatedBy,
   updateAssignment,
+  // Team accesses
+  createTeamAccess,
+  getTeamAccesses,
+  revokeTeamAccess,
+  activateTeamAccess,
+  findTeamAccess,
 } = require('./firestore-operations');
 
 // ── STARTUP VALIDATION ─────────────────────────────────────────

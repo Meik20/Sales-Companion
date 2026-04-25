@@ -1434,7 +1434,7 @@ body {
 </div>
 
 <!-- ACTIVATION FORM (Member First Login) -->
-<div id="activation-form" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:var(--bg);z-index:1000;padding:20px;display:flex;flex-direction:column;justify-content:center;align-items:center">
+<div id="activation-form" style="display:none !important;position:fixed;top:0;left:0;right:0;bottom:0;background:var(--bg);z-index:1000;padding:20px;flex-direction:column;justify-content:center;align-items:center">
   <div style="width:100%;max-width:360px;background:var(--bg-card);border-radius:20px;padding:30px;box-shadow:var(--shadow-lg)">
     <div style="text-align:center;margin-bottom:30px">
       <div style="font-size:48px;margin-bottom:12px">🔑</div>
@@ -1458,7 +1458,7 @@ body {
     </div>
     
     <button class="a-btn" id="activate-access-btn" onclick="activateMemberAccess()">Activer mon compte</button>
-    <button class="sheet-btn secondary" style="margin-top:10px" onclick="showMemberActivationFlow(); document.getElementById('login-form').style.display='block'; document.getElementById('activation-form').style.display='none'">Retour à la connexion</button>
+    <button class="sheet-btn secondary" style="margin-top:10px" onclick="backToLoginForm()">Retour à la connexion</button>
   </div>
 </div>
 

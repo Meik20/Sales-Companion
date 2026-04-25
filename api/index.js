@@ -113,6 +113,7 @@ async function generateSearchSummary(query, filters, companies) {
 // ── SERVER SETUP ──────────────────────────────────────────────
 const app = express();
 const UPLOAD_DIR = path.join('/tmp', 'uploads');
+const upload = multer({ dest: UPLOAD_DIR });
 
 if (!fs.existsSync(UPLOAD_DIR)) {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -175,6 +176,354 @@ app.get('/api/config/firebase', (req, res) => {
     console.error('Firebase config error:', error);
     res.status(500).json({ error: 'Failed to retrieve Firebase config' });
   }
+});
+
+// Admin routes for the admin panel
+app.post('/admin/login', async (req, res) => {
+  try {
+    const { username, password, email } = req.body;
+    const identifier = email || username;
+    if (!identifier || !password) return res.status(400).json({ error: 'Email/ID et mot de passe requis' });
+
+    let userRecord;
+    try {
+      userRecord = await auth.getUserByEmail(identifier);
+    } catch (err) {
+      return res.status(401).json({ error: 'Email ou mot de passe incorrect' });
+    }
+
+    const isAdmin = userRecord.customClaims?.admin === true;
+    if (!isAdmin) return res.status(403).json({ error: 'Accès refusé — admin uniquement' });
+
+    try {
+      const customToken = await auth.createCustomToken(userRecord.uid, { admin: true });
+      const user = await getUser(userRecord.uid);
+      await logUsage(userRecord.uid, 'admin_login');
+      res.json({
+        token: customToken,
+        user: {
+          uid: userRecord.uid,
+          email: userRecord.email,
+          name: user?.name || identifier.split('@')[0],
+          role: 'admin'
+        }
+      });
+    } catch (authErr) {
+      return res.status(401).json({ error: 'Authentification échouée' });
+    }
+  } catch (error) {
+    console.error('Admin login error:', error.message);
+    res.status(500).json({ error: 'Erreur de connexion admin' });
+  }
+});
+
+app.get('/admin/stats', verifyAdmin, async (req, res) => {
+  try {
+    const [usersSnap, companiesSnap, usageSnap] = await Promise.all([
+      db.collection('users').get(),
+      db.collection('companies').get(),
+      db.collection('usage_logs').get(),
+    ]);
+
+    const users = usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const companies = companiesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const usageLogs = usageSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayIso = today.toISOString();
+
+    const activeToday = usageLogs.filter((log) => {
+      if (!log.createdAt) return false;
+      if (typeof log.createdAt === 'string') return log.createdAt >= todayIso;
+      if (log.createdAt instanceof Date) return log.createdAt >= today;
+      if (typeof log.createdAt.toDate === 'function') return log.createdAt.toDate() >= today;
+      return false;
+    }).length;
+
+    const planMap = {};
+    users.forEach(u => { const plan = u.plan || 'free'; planMap[plan] = (planMap[plan] || 0) + 1; });
+
+    const regionMap = {};
+    const secteurMap = {};
+    companies.forEach(c => {
+      if (c.region) regionMap[c.region] = (regionMap[c.region] || 0) + 1;
+      if (c.sector) secteurMap[c.sector] = (secteurMap[c.sector] || 0) + 1;
+    });
+
+    const statsData = {
+      totalUsers: users.length,
+      totalCompanies: companies.length,
+      activeToday,
+      totalSearches: usageLogs.length,
+      planCounts: Object.entries(planMap).map(([plan, count]) => ({ plan, c: count })),
+      companiesByRegion: Object.entries(regionMap).sort((a,b) => b[1] - a[1]).slice(0, 8).map(([region, c]) => ({ region, c })),
+      companiesBySecteur: Object.entries(secteurMap).sort((a,b) => b[1] - a[1]).slice(0, 8).map(([secteur, c]) => ({ secteur, c })),
+      recentLogs: usageLogs.sort((a,b) => new Date(b.createdAt || b.created_at || 0) - new Date(a.createdAt || a.created_at || 0)).slice(0, 20),
+    };
+
+    res.json(statsData);
+  } catch (error) {
+    console.error('Admin stats error:', error);
+    res.status(500).json({ error: 'Erreur récupération stats admin' });
+  }
+});
+
+app.get('/admin/config', verifyAdmin, async (req, res) => {
+  try {
+    const groq_api_key = await getConfig('groq_api_key').catch(() => null);
+    res.json({ groq_api_key: groq_api_key || null });
+  } catch (error) {
+    res.json({ groq_api_key: null });
+  }
+});
+
+app.post('/admin/config', verifyAdmin, async (req, res) => {
+  try {
+    let { key, value } = req.body;
+    if (!key && req.body && typeof req.body === 'object') {
+      const payloadKeys = Object.keys(req.body).filter((k) => k !== 'value');
+      if (payloadKeys.length === 1) { key = payloadKeys[0]; value = req.body[key]; }
+    }
+    if (!key || typeof key !== 'string' || key.trim().length === 0) {
+      return res.status(400).json({ error: 'Config key required' });
+    }
+    await setConfig(key.trim(), value);
+    res.json({ message: `Config ${key.trim()} saved` });
+  } catch (error) {
+    console.error('Admin config save error:', error);
+    res.status(500).json({ error: 'Erreur de configuration' });
+  }
+});
+
+app.get('/admin/config/:key', verifyAdmin, async (req, res) => {
+  try {
+    const value = await getConfig(req.params.key);
+    res.json({ key: req.params.key, value });
+  } catch (error) {
+    console.error('Admin config read error:', error);
+    res.status(500).json({ error: 'Erreur de lecture de configuration' });
+  }
+});
+
+app.post('/admin/import', verifyAdmin, upload.single('file'), async (req, res) => {
+  const cleanup = () => { if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path); };
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    const workbook = XLSX.readFile(req.file.path);
+    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+    const data = XLSX.utils.sheet_to_json(worksheet);
+    if (data.length === 0) { cleanup(); return res.status(400).json({ error: 'Fichier vide' }); }
+
+    const companies = data.map((row) => ({
+      raisonSociale:      String(row.RAISON_SOCIALE || row['Raison Sociale'] || ''),
+      sigle:              String(row.SIGLE || row['Sigle'] || ''),
+      niu:                row.NIU ? String(row.NIU) : null,
+      activitePrincipale: String(row.ACTIVITE_PRINCIPALE || row['Activité Principale'] || ''),
+      centreRattachement: String(row.CENTRE_DE_RATTACHEMENT || row['Centre Rattachement'] || ''),
+      sector:             String(row.SECTEUR || row['Secteur'] || row.ACTIVITE_PRINCIPALE || row['Activité Principale'] || ''),
+      region:             String(row.CENTRE_DE_RATTACHEMENT || row['Centre Rattachement'] || '').split('/')[0] || '',
+      city:               String(row.CENTRE_DE_RATTACHEMENT || row['Centre Rattachement'] || '').split('/')[1] || '',
+      telephone:          String(row.TELEPHONE || row['Téléphone'] || ''),
+      email:              String(row.EMAIL || row['Email'] || ''),
+      siteWeb:            String(row.SITE_WEB || row['Site Web'] || ''),
+      dirigeant:          String(row.DIRIGEANT || row['Dirigeant'] || ''),
+      rccm:               String(row.RCCM || row['RCCM'] || ''),
+      active:             true,
+      sourceFile:         req.file.originalname,
+      createdAt:          new Date().toISOString(),
+    }));
+
+    const result = await importCompaniesBatch(companies);
+    cleanup();
+    const importLogRef = db.collection('import_logs').doc();
+    await importLogRef.set({
+      filename: req.file.originalname || 'upload',
+      total: data.length,
+      imported: result.importedCount || 0,
+      updated: result.updatedCount || 0,
+      skipped: result.skippedCount || 0,
+      errors: result.errorCount || 0,
+      createdAt: new Date().toISOString(),
+      sourceFile: req.file.originalname || '',
+    });
+
+    res.json({
+      total: data.length,
+      imported: result.importedCount || 0,
+      updated: result.updatedCount || 0,
+      skipped: result.skippedCount || 0,
+      errors: result.errorCount || 0,
+    });
+  } catch (error) {
+    cleanup();
+    console.error('Admin import error:', error);
+    res.status(500).json({ error: 'Erreur lors de l import' });
+  }
+});
+
+app.get('/admin/import-logs', verifyAdmin, async (req, res) => {
+  try {
+    const snap = await db.collection('import_logs').orderBy('createdAt', 'desc').limit(20).get();
+    const logs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    res.json({ data: logs });
+  } catch (error) {
+    console.error('Admin import logs error:', error);
+    res.json({ data: [] });
+  }
+});
+
+app.get('/admin/companies', verifyAdmin, async (req, res) => {
+  try {
+    const { q, region, secteur, page = 1 } = req.query;
+    let query = db.collection('companies');
+    if (region) query = query.where('region', '==', region);
+    if (secteur) query = query.where('sector', '==', secteur);
+    const snap = await query.get();
+    let companies = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    if (q) {
+      const ql = q.toLowerCase();
+      companies = companies.filter((c) =>
+        (c.raisonSociale || '').toLowerCase().includes(ql) ||
+        (c.niu || '').toLowerCase().includes(ql) ||
+        (c.activitePrincipale || '').toLowerCase().includes(ql)
+      );
+    }
+    const total = companies.length;
+    const limit = 50;
+    const start = (parseInt(page, 10) - 1) * limit;
+    res.json({ companies: companies.slice(start, start + limit), total, page: parseInt(page, 10), pages: Math.ceil(total / limit) || 1 });
+  } catch (error) {
+    console.error('Admin companies error:', error);
+    res.status(500).json({ error: 'Erreur chargement entreprises' });
+  }
+});
+
+app.delete('/admin/companies/all', verifyAdmin, async (req, res) => {
+  try {
+    const snap = await db.collection('companies').get();
+    const docs = snap.docs;
+    const BATCH_SIZE = 400;
+    let deleted = 0;
+    for (let i = 0; i < docs.length; i += BATCH_SIZE) {
+      const batch = db.batch();
+      docs.slice(i, i + BATCH_SIZE).forEach(doc => batch.delete(doc.ref));
+      await batch.commit();
+      deleted += Math.min(BATCH_SIZE, docs.length - i);
+    }
+    res.json({ success: true, deleted });
+  } catch (error) {
+    console.error('Admin delete companies error:', error);
+    res.status(500).json({ error: 'Erreur suppression totale' });
+  }
+});
+
+app.delete('/admin/companies/:id', verifyAdmin, async (req, res) => {
+  try {
+    await db.collection('companies').doc(req.params.id).delete();
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Admin delete company error:', error);
+    res.status(500).json({ error: 'Erreur suppression' });
+  }
+});
+
+app.get('/admin/users', verifyAdmin, async (req, res) => {
+  try {
+    const snap = await db.collection('users').get();
+    const users = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    res.json(users);
+  } catch (error) {
+    console.error('Admin users error:', error);
+    res.status(500).json({ error: 'Erreur chargement utilisateurs' });
+  }
+});
+
+app.post('/admin/users/:uid/plan', verifyAdmin, async (req, res) => {
+  try {
+    const { plan } = req.body;
+    if (!plan) return res.status(400).json({ error: 'Plan required' });
+    await updateUserPlan(req.params.uid, plan);
+    res.json({ message: `User plan updated to ${plan}` });
+  } catch (error) {
+    console.error('Admin update plan error:', error);
+    res.status(500).json({ error: 'Erreur de mise à jour du plan' });
+  }
+});
+
+app.post('/admin/users/:uid/toggle', verifyAdmin, async (req, res) => {
+  try {
+    const ref = db.collection('users').doc(req.params.uid);
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ error: 'Utilisateur non trouvé' });
+    const active = !snap.data().active;
+    await ref.update({ active });
+    res.json({ success: true, active });
+  } catch (error) {
+    console.error('Admin toggle user error:', error);
+    res.status(500).json({ error: 'Erreur toggle utilisateur' });
+  }
+});
+
+app.delete('/admin/users/:uid', verifyAdmin, async (req, res) => {
+  try {
+    await Promise.all([
+      auth.deleteUser(req.params.uid).catch(() => {}),
+      db.collection('users').doc(req.params.uid).delete(),
+    ]);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Admin delete user error:', error);
+    res.status(500).json({ error: 'Erreur suppression utilisateur' });
+  }
+});
+
+app.post('/admin/change-password', verifyAdmin, async (req, res) => {
+  try {
+    const { newPassword } = req.body;
+    if (!newPassword || newPassword.length < 6) return res.status(400).json({ error: 'Minimum 6 caractères' });
+    await auth.updateUser(req.userId, { password: newPassword });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Admin change password error:', error);
+    res.status(500).json({ error: 'Erreur changement mot de passe' });
+  }
+});
+
+app.get('/support/messages', verifyAdmin, async (req, res) => {
+  try {
+    const messages = await getSupportMessages(100);
+    res.json({ data: messages });
+  } catch (error) {
+    console.error('Admin support messages error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/support/messages/:id', verifyAdmin, async (req, res) => {
+  try {
+    const { reply } = req.body;
+    if (!reply || !reply.trim()) return res.status(400).json({ error: 'Reply is required' });
+    await replyToSupportMessage(req.params.id, reply, req.userEmail);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Admin reply support message error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/support/messages/:id/close', verifyAdmin, async (req, res) => {
+  try {
+    await closeSupportMessage(req.params.id);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Admin close support message error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/admin*', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'server', 'admin', 'index.html'));
 });
 
 // Auth Routes

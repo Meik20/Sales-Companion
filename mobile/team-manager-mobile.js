@@ -42,7 +42,7 @@ function toast(message) {
 }
 
 function openSheet(sheetId) {
-  if (typeof window.openSheet === 'function') {
+  if (typeof window.openSheet === 'function' && window.openSheet !== openSheet) {
     window.openSheet(sheetId);
     return;
   }
@@ -53,7 +53,7 @@ function openSheet(sheetId) {
 }
 
 function closeSheet(sheetId) {
-  if (typeof window.closeSheet === 'function') {
+  if (typeof window.closeSheet === 'function' && window.closeSheet !== closeSheet) {
     window.closeSheet(sheetId);
     return;
   }
@@ -197,6 +197,93 @@ async function activateMemberAccess() {
   }
 }
 
+/* MOBILE NAV HELPERS */
+function findMobileNavContainer() {
+  return (
+    document.getElementById('mobile-bottom-nav') ||
+    document.getElementById('mobile-nav') ||
+    document.getElementById('bottom-nav') ||
+    document.querySelector('.mobile-bottom-nav') ||
+    document.querySelector('.mobile-nav') ||
+    document.querySelector('.bottom-nav')
+  );
+}
+
+function ensureMobileTeamTab() {
+  if (getUserRole() !== 'manager') return null;
+
+  var existing =
+    document.getElementById('nav-team-mobile') ||
+    document.querySelector('[data-tab="team"]') ||
+    document.querySelector('[data-nav="team"]');
+
+  if (existing) {
+    existing.style.display = '';
+    return existing;
+  }
+
+  var nav = findMobileNavContainer();
+  if (!nav) return null;
+
+  var btn = document.createElement('button');
+  btn.id = 'nav-team-mobile';
+  btn.type = 'button';
+  btn.className = 'mobile-nav-item';
+  btn.setAttribute('data-tab', 'team');
+  btn.innerHTML =
+    '<span class="mobile-nav-icon">👥</span>' +
+    '<span class="mobile-nav-label">Équipe</span>';
+
+  btn.addEventListener('click', function () {
+    if (typeof window.switchTab === 'function') {
+      window.switchTab('team');
+    }
+
+    var tabTeam = document.getElementById('tab-team');
+    if (tabTeam) tabTeam.style.display = '';
+
+    var allTabs = document.querySelectorAll('.tab-content');
+    allTabs.forEach(function (el) {
+      if (el.id === 'tab-team') {
+        el.classList.add('active');
+        el.style.display = '';
+      } else {
+        el.classList.remove('active');
+      }
+    });
+
+    refreshTeamData();
+  });
+
+  nav.appendChild(btn);
+  return btn;
+}
+
+function setManagerMobileUI(isManager) {
+  var mobileTeamBtn =
+    document.getElementById('nav-team-mobile') ||
+    document.querySelector('[data-tab="team"]') ||
+    document.querySelector('[data-nav="team"]');
+
+  if (isManager) {
+    mobileTeamBtn = ensureMobileTeamTab();
+  }
+
+  if (mobileTeamBtn) {
+    mobileTeamBtn.style.display = isManager ? '' : 'none';
+  }
+
+  var mobileAssignBtn = document.getElementById('manager-assign-btn-mobile');
+  if (mobileAssignBtn) {
+    mobileAssignBtn.style.display = isManager ? '' : 'none';
+  }
+
+  var mobileTeamBadge = document.getElementById('team-badge-mobile');
+  if (mobileTeamBadge && !isManager) {
+    mobileTeamBadge.style.display = 'none';
+  }
+}
+
 /* ROLE MANAGER / NAV */
 function applyManagerRole() {
   var isManager = getUserRole() === 'manager';
@@ -214,6 +301,13 @@ function applyManagerRole() {
     var teamBadge = document.getElementById('team-badge');
     if (teamBadge) teamBadge.style.display = 'none';
   }
+
+  setManagerMobileUI(isManager);
+}
+
+/* Alias compatibilité ancien code */
+function applyManagerRoleDesktop() {
+  applyManagerRole();
 }
 
 function switchTeamSeg(seg, el) {
@@ -301,6 +395,12 @@ async function loadTeamData() {
     if (tb) {
       tb.textContent = pendingCount;
       tb.style.display = pendingCount ? '' : 'none';
+    }
+
+    var tbMobile = document.getElementById('team-badge-mobile');
+    if (tbMobile) {
+      tbMobile.textContent = pendingCount;
+      tbMobile.style.display = pendingCount ? '' : 'none';
     }
 
   } catch (e) {
@@ -624,8 +724,50 @@ function renderActivityFeed() {
   });
 }
 
+/* MONKEY PATCH / GLOBAL BRIDGE */
+function patchMobileFunctions() {
+  window.applyManagerRole = applyManagerRole;
+  window.applyManagerRoleDesktop = applyManagerRoleDesktop;
+  window.refreshTeamData = refreshTeamData;
+  window.loadTeamData = loadTeamData;
+  window.loadGeneratedAccesses = loadGeneratedAccesses;
+  window.renderAccessManagement = renderAccessManagement;
+  window.openCreateAccessSheet = openCreateAccessSheet;
+  window.switchTeamSeg = switchTeamSeg;
+
+  if (!window.TeamManagerMobile) {
+    window.TeamManagerMobile = {};
+  }
+
+  Object.assign(window.TeamManagerMobile, {
+    openSheet,
+    closeSheet,
+    switchToActivationFlow,
+    backToLoginForm,
+    activateMemberAccess,
+    applyManagerRole,
+    applyManagerRoleDesktop,
+    switchTeamSeg,
+    refreshTeamData,
+    loadTeamData,
+    loadGeneratedAccesses,
+    renderAccessManagement,
+    openCreateAccessSheet,
+    updateAccessPreview,
+    copyAccessId,
+    revokeAccess,
+    showMemberActivationFlow: switchToActivationFlow,
+    renderTeamMembers,
+    toggleMemberCard,
+    buildActivityFeed,
+    renderActivityFeed
+  });
+}
+
 /* INIT */
 document.addEventListener('DOMContentLoaded', function () {
+  patchMobileFunctions();
+
   var activateAccessBtn = document.getElementById('activate-access-btn');
   if (activateAccessBtn) {
     activateAccessBtn.addEventListener('click', activateMemberAccess);
@@ -641,7 +783,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
   setTimeout(function () {
     applyManagerRole();
+
     if (getUserRole() === 'manager') {
+      ensureMobileTeamTab();
       loadTeamData();
       loadGeneratedAccesses().then(function () {
         if (currentTeamSeg === 'access') renderAccessManagement();
@@ -651,13 +795,15 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 /* EXPORT GLOBAL */
-window.TeamManagerMobile = {
+window.TeamManagerMobile = window.TeamManagerMobile || {};
+Object.assign(window.TeamManagerMobile, {
   openSheet,
   closeSheet,
   switchToActivationFlow,
   backToLoginForm,
   activateMemberAccess,
   applyManagerRole,
+  applyManagerRoleDesktop,
   switchTeamSeg,
   refreshTeamData,
   loadTeamData,
@@ -672,8 +818,12 @@ window.TeamManagerMobile = {
   toggleMemberCard,
   buildActivityFeed,
   renderActivityFeed
-};
+});
 
 window.switchToActivationFlow = switchToActivationFlow;
+window.backToLoginForm = backToLoginForm;
+window.activateMemberAccess = activateMemberAccess;
 window.applyManagerRole = applyManagerRole;
+window.applyManagerRoleDesktop = applyManagerRoleDesktop;
 window.switchTeamSeg = switchTeamSeg;
+window.refreshTeamData = refreshTeamData;

@@ -156,7 +156,7 @@ function updateAccessPreview() {
 ========================================================= */
 async function countManagerAccesses(managerUid) {
   const q = query(
-    collection(db, "member_access"),
+    collection(db, "team_accesses"),
     where("createdBy", "==", managerUid)
   );
 
@@ -203,7 +203,7 @@ async function createMemberAccess() {
       return false;
     }
 
-    const memberRef = doc(db, "member_access", accessId);
+    const memberRef = doc(db, "team_accesses", accessId);
     const existing = await getDoc(memberRef);
 
     if (existing.exists()) {
@@ -270,7 +270,7 @@ async function activateMemberAccount(accessId, password, confirmPassword) {
       return { success: false, message: "Les mots de passe ne correspondent pas." };
     }
 
-    const memberRef = doc(db, "member_access", normalizedAccessId);
+    const memberRef = doc(db, "team_accesses", normalizedAccessId);
     const memberSnap = await getDoc(memberRef);
 
     if (!memberSnap.exists()) {
@@ -363,7 +363,7 @@ async function deleteMemberAccess(accessId) {
     }
 
     const normalizedAccessId = normalizeTextAccessId(accessId);
-    const memberRef = doc(db, "member_access", normalizedAccessId);
+    const memberRef = doc(db, "team_accesses", normalizedAccessId);
     const memberSnap = await getDoc(memberRef);
 
     if (!memberSnap.exists()) {
@@ -394,7 +394,7 @@ async function deleteMemberAccess(accessId) {
 async function checkMemberAccessExists(accessId) {
   try {
     const normalizedAccessId = normalizeTextAccessId(accessId);
-    const memberRef = doc(db, "member_access", normalizedAccessId);
+    const memberRef = doc(db, "team_accesses", normalizedAccessId);
     const snap = await getDoc(memberRef);
 
     if (!snap.exists()) {

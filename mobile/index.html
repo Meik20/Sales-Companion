@@ -1927,7 +1927,10 @@ async function checkAuthMe() {
     token = fresh; localStorage.setItem('sc_token', token);
     const r = await api('GET', '/auth/me', null, token);
     if (!r || !r.ok) { if (r && r.status === 401) { localStorage.removeItem('sc_token'); token = ''; } return false; }
-    user = await r.json(); updateTopbar(); updateSidebar(); showApp();
+    user = await r.json();
+    window.user = user;
+    updateTopbar(); updateSidebar(); showApp();
+    if (typeof applyManagerRole !== 'undefined') applyManagerRole();
     return true;
   } catch (e) { return false; }
 }
@@ -1986,8 +1989,13 @@ async function doLogin() {
     var idToken = await cred.user.getIdToken();
     token = idToken;
     var userDoc = await db.collection('users').doc(cred.user.uid).get();
-    if (userDoc.exists) { user = userDoc.data(); localStorage.setItem('sc_token', token); showApp(); }
-    else { throw new Error('Profil utilisateur non trouve'); }
+    if (userDoc.exists) {
+      user = userDoc.data();
+      window.user = user;
+      localStorage.setItem('sc_token', token);
+      showApp();
+      if (typeof applyManagerRole !== 'undefined') applyManagerRole();
+    } else { throw new Error('Profil utilisateur non trouve'); }
   } catch (e) { err.textContent = e.message || 'Erreur de connexion'; err.style.display = 'block'; }
   btn.disabled = false; btn.textContent = 'Se connecter';
   isInitializing = false;
@@ -2057,7 +2065,7 @@ function showApp() {
   document.getElementById('bottom-nav').style.display = 'flex';
   updateTopbar(); updateSidebar(); loadPipeline(); loadSaved();
   var mbtn = document.getElementById('manager-assign-btn-m');
-  if (mbtn) mbtn.style.display = (user && user.role === 'manager') ? 'block' : 'none';
+  if (mbtn) mbtn.style.display = (window.user && window.user.role === 'manager') ? 'block' : 'none';
   if (navigator.onLine) syncOfflineQueue();
   if (typeof applyManagerRole !== 'undefined') applyManagerRole();
 }

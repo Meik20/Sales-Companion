@@ -314,7 +314,7 @@ async function loadGeneratedAccesses() {
 
   try {
     const q = query(
-      collection(db, "member_access"),
+      collection(db, "team_accesses"),
       where("createdBy", "==", window.user.uid)
     );
 

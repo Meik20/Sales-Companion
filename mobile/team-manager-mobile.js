@@ -308,6 +308,10 @@ function applyManagerRole() {
   setManagerMobileUI(isManager);
 }
 
+// Patch: Expose for inline scripts
+window.applyManagerRole = applyManagerRole;
+
+
 /* Alias compatibilité ancien code */
 function applyManagerRoleDesktop() {
   applyManagerRole();
@@ -408,7 +412,7 @@ async function loadTeamData() {
 
   } catch (e) {
     if (container) {
-      container.innerHTML = '<div class="team-empty"><div class="team-empty-icon">📡</div><h3>Impossible de charger</h3><p>' + escapeHtml(e.message) + '</p></div>';
+      container.innerHTML = "<div class='team-empty'><div class='team-empty-icon'>📡</div><h3>Impossible de charger</h3><p>" + escapeHtml(e.message) + "</p></div>";
     }
   } finally {
     if (teamLoadingEl) teamLoadingEl.style.display = 'none';
@@ -505,11 +509,11 @@ function renderAccessManagement() {
         + '<div class="access-card-actions">';
 
       if (access.status === 'pending') {
-        html += '<button class="access-btn copy" type="button" onclick="window.TeamManagerMobile.copyAccessId(\'' + accessId.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\')">Copier l\\'ID</button>';
+        html += "<button class='access-btn copy' type='button' onclick=\"window.TeamManagerMobile.copyAccessId('" + accessId.replace(/'/g, "\\'") + "')\">Copier l'ID</button>";
       }
 
       if (access.status !== 'revoked') {
-        html += '<button class="access-btn revoke" type="button" onclick="window.TeamManagerMobile.revokeAccess(\'' + accessId.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\')">Révoquer</button>';
+        html += "<button class='access-btn revoke' type='button' onclick=\"window.TeamManagerMobile.revokeAccess('" + accessId.replace(/'/g, "\\'") + "')\">Révoquer</button>";
       }
 
       html += '</div></div>';
@@ -600,7 +604,7 @@ function renderTeamMembers() {
   if (teamLoading) teamLoading.style.display = 'none';
 
   if (!teamMembers.length) {
-    container.innerHTML = '<div class="team-empty"><div class="team-empty-icon">👥</div><h3>Aucun commercial</h3><p>Créez des accès pour votre équipe dans l\\'onglet "Accès".</p></div>';
+    container.innerHTML = "<div class='team-empty'><div class='team-empty-icon'>👥</div><h3>Aucun commercial</h3><p>Créez des accès pour votre équipe dans l'onglet \"Accès\".</p></div>";
     return;
   }
 
@@ -693,7 +697,7 @@ function renderActivityFeed() {
   container.innerHTML = '';
 
   if (!activityFeed.length) {
-    container.innerHTML = '<div class="team-empty"><div class="team-empty-icon">⚡</div><h3>Aucune activité</h3><p>L\\'activité de votre équipe apparaît ici en temps réel.</p></div>';
+    container.innerHTML = "<div class='team-empty'><div class='team-empty-icon'>⚡</div><h3>Aucune activité</h3><p>L'activité de votre équipe apparaît ici en temps réel.</p></div>";
     return;
   }
 

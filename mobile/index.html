@@ -1162,7 +1162,7 @@ body {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
     <span>Assistant</span>
   </button>
-  <button class="nav-btn" id="nav-team" onclick="switchTab2('team')" style="display:none">
+  <button class="nav-btn" id="nav-team" onclick="switchTab2('team')">
     <div class="nav-bar"></div>
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
     <span>Équipe</span>
@@ -1399,7 +1399,7 @@ body {
     <div style="border-top:1px solid var(--border);margin-top:16px;padding-top:16px">
       <div style="font-size:12px;font-weight:700;color:var(--text-tertiary);text-transform:uppercase;margin-bottom:10px">Navigation</div>
       <button class="sheet-btn secondary" onclick="window.location.href='/'" style="margin-bottom:8px">&#x1F4CD; Retour &agrave; l&apos;accueil</button>
-      <button id="manager-assign-btn-m" class="sheet-btn secondary" onclick="openManagerAssignMobile()" style="margin-bottom:8px;display:none">&#x1F5C2; Cr&eacute;er assignation</button>
+      <button id="manager-assign-btn-m" class="sheet-btn secondary" onclick="openManagerAssignMobile()" style="margin-bottom:8px">&#x1F5C2; Cr&eacute;er assignation</button>
     </div>
     <div style="border-top:1px solid var(--border);margin-top:16px;padding-top:16px">
       <div style="font-size:12px;font-weight:700;color:var(--text-tertiary);text-transform:uppercase;margin-bottom:10px">Application</div>
@@ -1544,7 +1544,15 @@ async function initializeFirebase(attempt) {
 }
 
 initializeFirebase();
-document.addEventListener('DOMContentLoaded', function() { if (!auth) initializeFirebase(); });
+document.addEventListener('DOMContentLoaded', function() {
+  if (!auth) initializeFirebase();
+  // Ensure MANAGER UI is set on page load if user is present
+  setTimeout(function() {
+    if (window.user && typeof window.applyManagerRole === 'function') {
+      window.applyManagerRole();
+    }
+  }, 300);
+});
 
 var REGION_CITIES = {
   '':['Douala','Yaounde','Bafoussam','Garoua','Bamenda','Maroua','Ngaoundere','Bertoua','Ebolowa','Kribi','Limbe','Buea','Kumba','Edea','Nkongsamba'],
@@ -1580,6 +1588,29 @@ function syncGlobalAuthState() {
 }
 
 // --- REMOVE DUPLICATE checkAuthMe (keep only one, harmonized below) ---
+
+// Patch: Ensure MANAGER UI is updated after login/register
+function afterLoginOrRegister() {
+  if (typeof window.applyManagerRole === 'function') {
+    setTimeout(function() { window.applyManagerRole(); }, 100);
+  }
+}
+
+// Patch: Hook into login/register success
+if (typeof window.handleLoginSuccess === 'function') {
+  const origLogin = window.handleLoginSuccess;
+  window.handleLoginSuccess = function() {
+    origLogin.apply(this, arguments);
+    afterLoginOrRegister();
+  };
+}
+if (typeof window.handleRegisterSuccess === 'function') {
+  const origRegister = window.handleRegisterSuccess;
+  window.handleRegisterSuccess = function() {
+    origRegister.apply(this, arguments);
+    afterLoginOrRegister();
+  };
+}
 var OFFLINE_QUEUE_KEY = 'sc_offline_queue';
 var OFFLINE_SEARCH_KEY = 'sc_offline_search';
 

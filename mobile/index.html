@@ -2541,22 +2541,23 @@ async function submitAssignmentMobile() {
  
   try {
     var r = await api('POST', '/api/assignments', {
-      assigneeId:  assignee,                             // firebaseUid du membre
-      prospectIds: Array.from(selectedForAssignMobile),
-      note:        note
+      assigneeId:   assignee,                             // firebaseUid du membre
+      prospectIds:  Array.from(selectedForAssignMobile),
+      note:         note,
+      // ✅ Ajout : fournir le managerUid pour validation côté Railway
+      managerUid:   (window.user && window.user.uid) || ''
     }, token);
- 
+
     if (!r.ok) {
       var d = await r.json().catch(function() { return {}; });
-      if (r.status === 403) return toast('Accès refusé : ce membre ne fait pas partie de votre équipe.');
-      if (r.status === 404) return toast('Membre introuvable.');
-      return toast('Erreur : ' + (d.error || 'Erreur serveur'));
+      // Afficher le message d'erreur brut pour déboguer
+      return toast('Erreur ' + r.status + ' : ' + (d.error || d.message || 'Erreur serveur'));
     }
- 
+
     toast('✅ Assignation créée');
     selectedForAssignMobile.clear();
     closeSheet('assign-create-sheet');
- 
+
   } catch(e) {
     toast('Erreur : ' + e.message);
   }

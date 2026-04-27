@@ -1202,9 +1202,17 @@ app.post('/api/assignments', verifyToken, async (req, res) => {
     const isAdmin = req.user && req.user.isAdmin === true;
     if (!isAdmin && assigneeUid !== req.userId) {
       try {
-        const members = await getTeamMembers(req.userId, 2000);
-        const allowed = Array.isArray(members) && members.some(m => m.uid === assigneeUid);
-        if (!allowed) return res.status(403).json({ error: 'Assignee is not part of your team' });
+        // Verify membership via team_accesses where firebaseUid == assigneeUid
+        // and createdBy == managerUid (req.userId) and status == 'active'
+        const snap = await admin.firestore().collection('team_accesses')
+          .where('firebaseUid', '==', assigneeUid)
+          .where('createdBy', '==', req.userId)
+          .where('status', '==', 'active')
+          .limit(1)
+          .get();
+        if (snap.empty) {
+          return res.status(403).json({ error: "Ce membre ne fait pas partie de votre équipe." });
+        }
       } catch (e) {
         return safeError(res, 500, 'Impossible de vérifier les membres de l\'équipe', e);
       }

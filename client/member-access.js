@@ -294,21 +294,23 @@
  
     // ── Vérification Firestore (lecture 'pending' autorisée sans auth) ──
     if (db) {
+      var managerUidFromAccess = '';
       try {
         var ref  = db.collection('team_accesses').doc(nid);
         var snap = await ref.get();
- 
+
         if (!snap.exists)
           return { success: false, message: "Identifiant introuvable. Vérifiez auprès de votre manager." };
- 
+
         var data = snap.data();
- 
+
         if (data.status === 'revoked')
           return { success: false, message: 'Cet accès a été révoqué par votre manager.' };
- 
+
         if (data.activated === true)
           return { success: false, message: "Compte déjà activé. Utilisez « S'identifier »." };
- 
+
+        managerUidFromAccess = data.createdBy || '';
       } catch (e) {
         // Si Firestore refuse (ex: règle non encore déployée),
         // continuer quand même — Railway vérifiera côté serveur
@@ -324,9 +326,10 @@
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          accessId: nid,
-          email:    email.trim().toLowerCase(),
-          password: password
+          accessId:   nid,
+          email:      email.trim().toLowerCase(),
+          password:   password,
+          managerUid: managerUidFromAccess || ''
         })
       });
  

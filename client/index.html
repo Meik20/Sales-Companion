@@ -3327,7 +3327,9 @@ _Partagé via Sales Companion_`;
           body: JSON.stringify({
             assigneeId:  assignee,                    // firebaseUid du membre
             prospectIds: [...selectedForAssign],
-            note:        note
+            note:        note,
+            // Fournir le managerUid pour validation côté Railway
+            managerUid:  (window.user && window.user.uid) || ''
           })
         });
  

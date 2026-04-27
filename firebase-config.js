@@ -19,10 +19,31 @@ if (!firebaseConfig.projectId) {
   console.warn('⚠️ Firebase config: projectId manquant');
 }
 
-try {
-  // ── Initialisation de l'app ──────────────────────────────────────
-  const app = firebase.initializeApp(firebaseConfig);
-  console.log('✓ Firebase app initialized');
+// If apiKey is not set, skip automatic initialization. Admin UI will
+// fetch runtime config from `/api/config/firebase` and call
+// `firebase.initializeApp(cfg)` itself. This prevents invalid-api-key
+// errors when the static file contains placeholders.
+if (!firebaseConfig.apiKey) {
+  console.log('[Firebase Config] apiKey empty — skipping automatic init');
+  // expose helper for consumers that want to initialize from server config
+  window.initFirebaseFromServer = async function() {
+    try {
+      const res = await fetch('/api/config/firebase');
+      const cfg = await res.json();
+      if (!cfg || !cfg.apiKey) throw new Error('No firebase config from server');
+      if (!firebase.apps.length) firebase.initializeApp(cfg);
+      return { ok: true };
+    } catch (e) {
+      console.error('[initFirebaseFromServer] failed:', e.message || e);
+      return { ok: false, error: e };
+    }
+  };
+
+} else {
+  try {
+    // ── Initialisation de l'app ──────────────────────────────────────
+    const app = firebase.initializeApp(firebaseConfig);
+    console.log('✓ Firebase app initialized');
 
   // ── Services ─────────────────────────────────────────────────────
   const auth = firebase.auth();

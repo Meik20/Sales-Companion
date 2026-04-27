@@ -1429,17 +1429,17 @@ body {
     <div id="plan-rows-m"></div>
     <div style="border-top:1px solid var(--border);margin-top:16px;padding-top:16px">
       <div style="font-size:12px;font-weight:700;color:var(--text-tertiary);text-transform:uppercase;margin-bottom:10px">Navigation</div>
-      <button class="sheet-btn secondary" onclick="window.location.href='/'" style="margin-bottom:8px">&#x1F4CD; Retour &agrave; l&apos;accueil</button>
-      <button id="manager-assign-btn-m" class="sheet-btn secondary" onclick="openManagerAssignMobile()" style="margin-bottom:8px">&#x1F5C2; Cr&eacute;er assignation</button>
+      <button class="sheet-btn secondary" onclick="closeSheet('profile-sheet'); window.location.href='/'" style="margin-bottom:8px">&#x1F4CD; Retour &agrave; l&apos;accueil</button>
+      <button id="manager-assign-btn-m" class="sheet-btn secondary" onclick="closeSheet('profile-sheet'); openManagerAssignMobile()" style="margin-bottom:8px">&#x1F5C2; Cr&eacute;er assignation</button>
     </div>
     <div style="border-top:1px solid var(--border);margin-top:16px;padding-top:16px">
       <div style="font-size:12px;font-weight:700;color:var(--text-tertiary);text-transform:uppercase;margin-bottom:10px">Application</div>
       <div style="font-size:12px;color:var(--text-tertiary);margin-bottom:8px">Version actuelle: <strong id="app-version">1.2.0</strong></div>
-      <button class="sheet-btn secondary" onclick="checkForUpdates()" style="margin-bottom:8px">&#x1F50D; V&eacute;rifier les mises &agrave; jour</button>
+      <button class="sheet-btn secondary" onclick="closeSheet('profile-sheet'); checkForUpdates()" style="margin-bottom:8px">&#x1F50D; V&eacute;rifier les mises &agrave; jour</button>
       <div style="font-size:11px;color:var(--text-tertiary)">Derni&egrave;re v&eacute;rification: <span id="last-check">jamais</span></div>
-      <button class="sheet-btn secondary" onclick="openAssignmentsSheet()" style="margin-top:8px">&#x1F5C2; Mes t&acirc;ches</button>
+      <button class="sheet-btn secondary" onclick="closeSheet('profile-sheet'); openAssignmentsSheet()" style="margin-top:8px">&#x1F5C2; Mes t&acirc;ches</button>
     </div>
-    <button class="lg-btn-m" onclick="doLogout()">Se d&eacute;connecter</button>
+    <button class="lg-btn-m" onclick="closeSheet('profile-sheet'); doLogout()">Se d&eacute;connecter</button>
   </div>
 </div>
 

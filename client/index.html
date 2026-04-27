@@ -3421,8 +3421,12 @@ _Partagé via Sales Companion_`;
       });
 
       // Profil
-      document.getElementById('logout-btn')?.addEventListener('click', doLogout);
+      document.getElementById('logout-btn')?.addEventListener('click', () => {
+        closeOverlayById && closeOverlayById('prof-overlay');
+        doLogout();
+      });
       document.getElementById('contact-admin-btn')?.addEventListener('click', () => {
+        closeOverlayById && closeOverlayById('prof-overlay');
         toast('Contactez votre administrateur pour tout changement de plan.');
       });
 

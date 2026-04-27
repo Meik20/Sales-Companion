@@ -1,50 +1,4 @@
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#1B5E20">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Sales Companion">
-<title>Sales Companion</title>
-
-<!-- Firebase SDK (compat) -->
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
-
-<!-- App Configuration -->
-<script src="firebase-config.js"></script>
-<script src="app-config.js"></script>
-<script src="team-manager-mobile.js"></script>
-
-<link rel="manifest" href="manifest.json">
-<link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="icons/icon-192.png">
-
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-
-<style>
-/* ═══════════════════════════════════════════════════
-   SALES COMPANION — REDESIGNED MOBILE UI
-   Design System v2.2 — Bugs Fixed
-   ═══════════════════════════════════════════════════ */
-
-*, *::before, *::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-  -webkit-tap-highlight-color: transparent;
-}
-
-:root {
-  --primary: #1B5E20;
-  --primary-light: #E8F5E9;
-  --primary-medium: #43A047;
-  --primary-dark: #0D3311;
+  
   --primary-hover: #2E7D32;
   companies.forEach(function(co, i) {
     /* ── Extraction des champs ── */
@@ -60,237 +14,7 @@
     var region   = co.region         || co.company_region|| '';
     var city     = co.ville          || co.city         || co.company_city  || '';
     var niu      = co.niu            || co.numero_niu   || '';
-    var sector   = co.secteur        || co.activite_principale || '';
-    var rccm     = co.rccm           || '';
-    var statut   = co.statut_juridique || '';
 
-    var initials = name.replace(/[^a-zA-ZÀ-ÿ\s]/g, '')
-      .split(' ').filter(Boolean)
-      .map(function(w) { return w[0]; })
-      .join('').slice(0, 2).toUpperCase() || '?';
-
-    var inPipeline   = pipelineCompanies[co.id];
-    var reliability  = getCompanyReliability(co);
-    var mapQ         = encodeURIComponent(name + ' ' + city + ' Cameroun');
-    var managerBtn   = (user && user.role === 'manager')
-      ? '<button class="ca" id="sel-btn-m-' + i + '" onclick="toggleSelectForAssignMobile(' + i + ')"'
-        + ' style="border:1px dashed var(--border-strong);background:transparent">Sélectionner</button>'
-      : '';
-
-    var card = document.createElement('div');
-    card.className = 'co-card';
-
-    card.innerHTML =
-
-      /* ── EN-TÊTE : avatar + nom + sigle + badges ── */
-      '<div class="co-head">'
-      + '<div class="co-av">' + initials + '</div>'
-      + '<div class="co-meta">'
-
-      /* Nom principal */
-      + '<div class="co-name">' + name
-      + (sigle ? ' <span style="font-size:11px;color:var(--text-tertiary);font-weight:400">(' + sigle + ')</span>' : '')
-      + '</div>'
-
-      /* Secteur en sous-titre */
-      + (sector
-        ? '<div class="co-sub" style="margin-bottom:6px">📂 ' + sector + '</div>'
-        : '<div style="height:4px"></div>')
-
-      /* Badges : pipeline, fiabilité, statut juridique */
-      + '<div class="co-badges">'
-      + (inPipeline  ? '<span class="cbadge cb-green">📌 Pipeline</span>' : '')
-      + '<span class="cbadge" style="background:' + reliability.color
-        + '20;color:' + reliability.color + ';border:1px solid ' + reliability.color + '40">'
-        + reliability.label + '</span>'
-      + (statut ? '<span class="cbadge cb-type">' + statut + '</span>' : '')
-      + (rccm   ? '<span class="cbadge cb-green">RCCM ✓</span>'       : '')
-      + '</div>'
-
-      + '</div>'  /* /.co-meta */
-      + '</div>'  /* /.co-head */
-
-      /* ── CORPS : grille d'informations structurées ── */
-      + '<div class="co-body" style="display:flex;flex-direction:column;gap:0;padding:0 16px 0">'
-
-      /* Ligne séparatrice */
-      + '<div style="height:1px;background:var(--border);margin-bottom:12px"></div>'
-
-      /* 1. Responsable */
-      + '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;'
-      + 'border-bottom:1px solid var(--border)">'
-      + '<span style="width:28px;height:28px;border-radius:50%;background:var(--bg-secondary);'
-      + 'display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">👤</span>'
-      + '<div style="flex:1;min-width:0">'
-      + '<div style="font-size:10px;font-weight:700;color:var(--text-tertiary);'
-      + 'text-transform:uppercase;letter-spacing:0.5px">Responsable</div>'
-      + '<div style="font-size:13px;font-weight:600;color:var(--text-primary);'
-      + 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
-      + (director || '<span style="color:var(--text-tertiary);font-weight:400">—</span>')
-      + '</div></div></div>'
-
-      /* 2. Téléphone */
-      + '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;'
-      + 'border-bottom:1px solid var(--border)">'
-      + '<span style="width:28px;height:28px;border-radius:50%;background:var(--bg-secondary);'
-      + 'display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">📞</span>'
-      + '<div style="flex:1;min-width:0">'
-      + '<div style="font-size:10px;font-weight:700;color:var(--text-tertiary);'
-      + 'text-transform:uppercase;letter-spacing:0.5px">Téléphone</div>'
-      + '<div style="font-size:13px;font-weight:600">'
-      + (phone
-        ? '<a href="tel:' + phone + '" style="color:var(--primary);text-decoration:none">' + phone + '</a>'
-        : '<span style="color:var(--text-tertiary);font-weight:400">—</span>')
-      + '</div></div></div>'
-
-      /* 3. Email */
-      + '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;'
-      + 'border-bottom:1px solid var(--border)">'
-      + '<span style="width:28px;height:28px;border-radius:50%;background:var(--bg-secondary);'
-      + 'display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">📧</span>'
-      + '<div style="flex:1;min-width:0">'
-      + '<div style="font-size:10px;font-weight:700;color:var(--text-tertiary);'
-      + 'text-transform:uppercase;letter-spacing:0.5px">Email</div>'
-      + '<div style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
-      + (email
-        ? '<a href="mailto:' + email + '" style="color:var(--blue);text-decoration:none">' + email + '</a>'
-        : '<span style="color:var(--text-tertiary)">—</span>')
-      + '</div></div></div>'
-
-      /* 4. Région + Ville (côte à côte) */
-      + '<div style="display:flex;gap:0;border-bottom:1px solid var(--border)">'
-
-      /* Région */
-      + '<div style="flex:1;display:flex;align-items:center;gap:8px;padding:8px 0;'
-      + 'border-right:1px solid var(--border);padding-right:12px">'
-      + '<span style="width:28px;height:28px;border-radius:50%;background:var(--bg-secondary);'
-      + 'display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">🗺️</span>'
-      + '<div style="min-width:0">'
-      + '<div style="font-size:10px;font-weight:700;color:var(--text-tertiary);'
-      + 'text-transform:uppercase;letter-spacing:0.5px">Région</div>'
-      + '<div style="font-size:13px;font-weight:500;color:var(--text-primary);'
-      + 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
-      + (region || '<span style="color:var(--text-tertiary);font-weight:400">—</span>')
-      + '</div></div></div>'
-
-      /* Ville */
-      + '<div style="flex:1;display:flex;align-items:center;gap:8px;padding:8px 0 8px 12px">'
-      + '<span style="width:28px;height:28px;border-radius:50%;background:var(--bg-secondary);'
-      + 'display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">📍</span>'
-      + '<div style="min-width:0">'
-      + '<div style="font-size:10px;font-weight:700;color:var(--text-tertiary);'
-      + 'text-transform:uppercase;letter-spacing:0.5px">Ville</div>'
-      + '<div style="font-size:13px;font-weight:500;color:var(--text-primary);'
-      + 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
-      + (city || '<span style="color:var(--text-tertiary);font-weight:400">—</span>')
-      + '</div></div></div>'
-
-      + '</div>'  /* /région+ville */
-
-      /* 5. NIU (si disponible) */
-      + (niu
-        ? '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;'
-          + 'border-bottom:1px solid var(--border)">'
-          + '<span style="width:28px;height:28px;border-radius:50%;background:var(--blue-light);'
-          + 'display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">🪪</span>'
-          + '<div style="flex:1;min-width:0">'
-          + '<div style="font-size:10px;font-weight:700;color:var(--text-tertiary);'
-          + 'text-transform:uppercase;letter-spacing:0.5px">NIU</div>'
-          + '<div style="font-size:12px;font-weight:700;color:var(--blue);'
-          + 'font-family:\'SF Mono\',\'Fira Code\',monospace;letter-spacing:0.5px">'
-          + niu + '</div></div></div>'
-        : '')
-
-      + '<div style="height:4px"></div>'
-      + '</div>'  /* /.co-body */
-
-      /* ── ACTIONS ── */
-      + '<div class="co-footer">'
-      + '<button class="ca pipeline" onclick="addToPipCard(' + i + ')">'
-      + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">'
-      + '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>'
-      + '<circle cx="9" cy="7" r="4"/></svg>Pipeline</button>'
-      + '<button class="ca maps" onclick="toggleMapM(\'' + cardId + '\',\'' + mapQ + '\')">'
-      + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">'
-      + '<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>'
-      + '<circle cx="12" cy="10" r="3"/></svg>Maps</button>'
-      + '<button class="ca nav" onclick="openMapRoute(' + i + ')">'
-      + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">'
-      + '<polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>It.</button>'
-      + '<button class="ca pitch" onclick="openPitchSheet(' + i + ')">'
-      + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">'
-      + '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>'
-      + '</svg>Pitch</button>'
-      + '<button class="ca note" onclick="openVoiceNoteSheet(' + i + ')">'
-      + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">'
-      + '<path d="M12 1a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V4a3 3 0 0 1 3-3z"/>'
-      + '<path d="M19 10a7 7 0 0 1-14 0"/>'
-      + '<line x1="12" y1="19" x2="12" y2="23"/></svg>Note</button>'
-      + '<button class="ca report" onclick="openCrowdSheet(' + i + ')">'
-      + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">'
-      + '<circle cx="12" cy="12" r="10"/>'
-      + '<line x1="12" y1="8" x2="12" y2="12"/>'
-      + '<line x1="12" y1="16" x2="12.01" y2="16"/></svg>Signaler</button>'
-      + '<button class="ca share" onclick="shareCard(' + i + ')">'
-      + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">'
-      + '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/>'
-      + '<circle cx="18" cy="19" r="3"/>'
-      + '<line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>'
-      + '<line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>Share</button>'
-      + managerBtn
-      + '</div>'
-
-      /* Panel carte (masqué par défaut) */
-      + '<div class="map-panel" id="map-' + cardId + '">'
-      + '<button class="map-close" onclick="toggleMapM(\'' + cardId + '\',\'\')">✕ Fermer la carte</button>'
-      + '<iframe loading="lazy" allowfullscreen></iframe>'
-      + '</div>';
-    area.appendChild(card);
-  });
-  transition: all var(--duration) var(--ease);
-  box-shadow: var(--shadow-xs);
-  overflow: hidden;
-  height: 36px;
-  line-height: 1;
-}
-.fchip.active { border-color: var(--primary); color: var(--primary); background: var(--primary-light); font-weight: 600; box-shadow: 0 0 0 1px var(--primary), var(--shadow-xs); }
-.fchip:active { transform: scale(.95); }
-
-/* FIX: constrain SVG icons inside chips */
-.fchip svg {
-  width: 16px !important;
-  height: 16px !important;
-  flex-shrink: 0;
-  display: block;
-}
-
-.filter-toggle{display:flex;align-items:center;gap:6px;padding:8px 16px 14px;font-size:13px;color:var(--primary);font-weight:600;cursor:pointer;flex-shrink:0;transition:opacity var(--duration) var(--ease)}
-.filter-toggle:active{opacity:.7}
-
-.results-container{flex:1;overflow-y:auto;padding:0 14px 14px;-webkit-overflow-scrolling:touch}
-.results-container::-webkit-scrollbar{display:none}
-.results-hdr{display:flex;align-items:center;justify-content:space-between;padding:10px 2px 12px;font-size:13px;color:var(--text-tertiary);flex-shrink:0}
-.results-hdr strong{color:var(--text-primary);font-size:15px;font-weight:700}
-.src-badge{font-size:11px;padding:4px 10px;border-radius:var(--r-full);font-weight:600}
-.src-db{background:var(--primary-light);color:var(--primary)}
-
-.co-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;box-shadow:var(--shadow-card);margin-bottom:12px;transition:all var(--duration) var(--ease)}
-.co-card:active{transform:scale(.99)}
-.co-head{padding:16px 16px 10px;display:flex;align-items:flex-start;gap:12px}
-.co-av{width:48px;height:48px;border-radius:14px;background:var(--primary-light);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:var(--primary);flex-shrink:0;border:2px solid rgba(27,94,32,0.08)}
-.co-meta{flex:1;min-width:0}
-.co-name{font-size:15px;font-weight:700;color:var(--text-primary);margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-0.2px}
-.co-sub{font-size:12px;color:var(--text-tertiary);margin-bottom:6px;display:flex;gap:6px;flex-wrap:wrap;line-height:1.4}
-.co-badges{display:flex;gap:4px;flex-wrap:wrap}
-.cbadge{font-size:10px;padding:2px 8px;border-radius:var(--r-full);font-weight:600;letter-spacing:0.2px}
-.cb-type{background:var(--bg-secondary);color:var(--text-secondary);border:1px solid var(--border)}
-.cb-niu{background:var(--blue-light);color:var(--blue);font-family:'SF Mono','Fira Code',monospace;font-size:9px}
-.cb-green{background:var(--primary-light);color:var(--primary)}
-.co-body{padding:0 16px 14px;display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.co-f{display:flex;flex-direction:column;gap:2px}
-.co-f.full{grid-column:1 / -1}
-.co-fl{font-size:10px;font-weight:700;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.5px}
-.co-fv{font-size:13px;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .co-fv.phone{color:var(--primary);font-weight:600}
 .co-fv.full{white-space:normal;line-height:1.4}
 .co-fv a{color:var(--blue);text-decoration:none}
@@ -1063,24 +787,7 @@
     </div>
   </div>
 
-  <!-- NEW THREAD SHEET -->
-  <div class="sheet-overlay" id="new-thread-overlay" onclick="closeSheet('new-thread-sheet')"></div>
-  <div class="sheet" id="new-thread-sheet">
-    <div class="sheet-handle"></div>
-    <div class="sheet-title">Nouveau message au support</div>
-    <div class="sheet-body">
-      <div class="sfield">
-        <label>Sujet</label>
-        <input type="text" id="new-thread-subject" placeholder="Ex: Problème de connexion..." style="width:100%;padding:12px 14px;border:1.5px solid var(--border-strong);border-radius:var(--r);font-size:14px;font-family:'Inter',sans-serif;color:var(--text-primary);background:var(--bg-secondary);outline:none">
-      </div>
-      <div class="sfield">
-        <label>Message</label>
-        <textarea id="new-thread-message" placeholder="Décrivez votre question ou problème..." style="width:100%;padding:12px 14px;border:1.5px solid var(--border-strong);border-radius:var(--r);font-size:14px;font-family:'Inter',sans-serif;color:var(--text-primary);background:var(--bg-secondary);outline:none;resize:none;min-height:100px;line-height:1.5"></textarea>
-      </div>
-      <button class="sheet-btn" onclick="createSupportThread()">Envoyer</button>
-      <button class="sheet-btn secondary" onclick="closeSheet('new-thread-sheet')">Annuler</button>
-    </div>
-  </div>
+  
 
   <!-- CHAT TAB -->
   <div class="tab-content" id="tab-chat">
@@ -1366,6 +1073,24 @@
 </div>
 
 <!-- PROFILE SHEET -->
+<!-- NEW THREAD SHEET -->
+<div class="sheet-overlay" id="new-thread-overlay" onclick="closeSheet('new-thread-sheet')"></div>
+<div class="sheet" id="new-thread-sheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-title">Nouveau message au support</div>
+  <div class="sheet-body">
+    <div class="sfield">
+      <label>Sujet</label>
+      <input type="text" id="new-thread-subject" placeholder="Ex: Problème de connexion...">
+    </div>
+    <div class="sfield">
+      <label>Message</label>
+      <textarea id="new-thread-message" placeholder="Décrivez votre question ou problème..." style="min-height:100px;resize:none;line-height:1.5"></textarea>
+    </div>
+    <button class="sheet-btn" onclick="createSupportThread()">Envoyer</button>
+    <button class="sheet-btn secondary" onclick="closeSheet('new-thread-sheet')">Annuler</button>
+  </div>
+</div>
 <div class="sheet-overlay" id="profile-overlay" onclick="closeSheet('profile-sheet')"></div>
 <div class="sheet" id="profile-sheet">
   <div class="sheet-handle"></div>
@@ -1637,7 +1362,7 @@ async function syncOfflineQueue() {
     } catch (e) { remaining.push(action); break; }
   }
   setOfflineQueue(remaining);
-  if (syncedCount) { toast(syncedCount + ' action(s) synchronisee(s)'); loadPipeline(); loadSupportMessagesMobile(); }
+  if (syncedCount) { toast(syncedCount + ' action(s) synchronisee(s)'); loadPipeline(); if (window.SupportManager && window.SupportManager.loadSupportThreads) window.SupportManager.loadSupportThreads(); }
   else { toast('Aucune action synchronisee. Reessayez plus tard.'); }
   renderOfflineSheet();
 }
@@ -1983,7 +1708,7 @@ async function saveVoiceNote() {
   try {
     var r = await api('POST', '/api/support/messages', { subject: subject, message: message }, token);
     if (!r.ok) throw new Error('Erreur envoi');
-    toast('Note vocale envoyee'); closeSheet('voice-note-sheet'); loadSupportMessagesMobile();
+    toast('Note vocale envoyee'); closeSheet('voice-note-sheet'); if (window.SupportManager && window.SupportManager.loadSupportThreads) window.SupportManager.loadSupportThreads();
   } catch (e) { enqueueOfflineAction({ type: 'support-report', payload: { subject: subject, message: message } }); toast('Sauvegarde hors ligne'); closeSheet('voice-note-sheet'); }
 }
 
@@ -2004,7 +1729,7 @@ async function sendCrowdReport() {
   try {
     var r = await api('POST', '/api/support/messages', { subject: subject, message: message }, token);
     if (!r.ok) throw new Error('Erreur envoi');
-    toast('Signalement envoye'); closeSheet('crowd-sheet'); loadSupportMessagesMobile();
+    toast('Signalement envoye'); closeSheet('crowd-sheet'); if (window.SupportManager && window.SupportManager.loadSupportThreads) window.SupportManager.loadSupportThreads();
   } catch (e) { enqueueOfflineAction({ type: 'support-report', payload: { subject: subject, message: message } }); toast('Sauvegarde hors ligne'); closeSheet('crowd-sheet'); }
 }
 
@@ -2402,7 +2127,11 @@ function switchTab2(name) {
   document.getElementById('tab-' + name).classList.add('active');
   document.getElementById('nav-' + name).classList.add('active');
   document.getElementById('fab').classList.toggle('show', name === 'pipeline');
-  if (name === 'support') loadSupportThreads();
+  if (name === 'support') {
+    if (typeof window.SupportManager !== 'undefined' && window.SupportManager.loadSupportThreads) {
+      window.SupportManager.loadSupportThreads();
+    }
+  }
   if (name === 'team' && typeof applyManagerRole !== 'undefined') applyManagerRole();
 }
 
@@ -3739,5 +3468,6 @@ function onRegisterAccountTypeChangeMobile() {
 
 <script src="member-access.js"></script>
 <script src="team-manager-mobile.js"></script>
+<script src="support.js"></script>
 </body>
 </html>

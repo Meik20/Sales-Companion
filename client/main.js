@@ -130,6 +130,15 @@ function getServerUrl() {
   return DEFAULT_SERVER;
 }
 
+function getStoredToken() {
+  try {
+    if (fs.existsSync(TOKEN_FILE)) return fs.readFileSync(TOKEN_FILE, 'utf8').trim();
+  } catch (err) {
+    console.error('Failed to read stored token:', err && err.message);
+  }
+  return '';
+}
+
 ipcMain.handle('get-token', () => {
   try {
     return fs.existsSync(TOKEN_FILE)
@@ -371,20 +380,22 @@ ipcMain.handle('chat', (_, p) => {
 ipcMain.handle('supportMessages', (_, method, token) => {
   const serverUrl = getServerUrl();
   console.log(`📧 Support messages [${method}] with server: ${serverUrl}`);
+  const effectiveToken = token || getStoredToken();
   if (method === 'GET') {
-    return requestWithRetry(serverUrl, 'GET', '/api/support/messages/user', null, token);
+    return requestWithRetry(serverUrl, 'GET', '/api/support/messages/user', null, effectiveToken);
   }
 });
 
 ipcMain.handle('createSupportMessage', (_, p) => {
   const serverUrl = getServerUrl();
   console.log(`📨 Creating support message with server: ${serverUrl}`);
+  const effectiveToken = (p && p.token) || getStoredToken();
   return requestWithRetry(
     serverUrl,
     'POST',
     '/api/support/messages',
     { subject: p.subject, message: p.message },
-    p.token
+    effectiveToken
   );
 });
 
@@ -392,20 +403,20 @@ ipcMain.handle('createSupportMessage', (_, p) => {
    SAVED SEARCHES
 ───────────────────────────────────────────── */
 ipcMain.handle('save-search', (_, token, data) =>
-  requestWithRetry(getServerUrl(), 'POST', '/api/saved-searches', data, token)
+  requestWithRetry(getServerUrl(), 'POST', '/api/saved-searches', data, token || getStoredToken())
 );
 
 ipcMain.handle('load-saved-searches', (_, token) =>
-  requestWithRetry(getServerUrl(), 'GET', '/api/saved-searches', null, token)
+  requestWithRetry(getServerUrl(), 'GET', '/api/saved-searches', null, token || getStoredToken())
 );
 
 ipcMain.handle('delete-saved-search', (_, token, id) =>
   requestWithRetry(
     getServerUrl(),
     'DELETE',
-    `/api/saved-searches/${id}`,
+    `/api/saved-searches/${encodeURIComponent(id)}`,
     null,
-    token
+    token || getStoredToken()
   )
 );
 
@@ -416,29 +427,16 @@ ipcMain.handle('pipeline', (_, method, token, id, data) => {
   const url = getServerUrl();
   console.log(`📋 Pipeline [${method}] with server: ${url}`);
 
-  if (method === 'GET')
-    return requestWithRetry(url, 'GET', '/api/pipeline', null, token);
+  const allowed = ['GET', 'POST', 'PUT', 'DELETE'];
+  const m = (String(method || '').toUpperCase());
+  if (!allowed.includes(m)) return Promise.reject(new Error('Invalid pipeline method'));
 
-  if (method === 'POST')
-    return requestWithRetry(url, 'POST', '/api/pipeline', data, token);
+  const effectiveToken = token || getStoredToken();
 
-  if (method === 'PUT')
-    return requestWithRetry(
-      url,
-      'PUT',
-      `/api/pipeline/${id}`,
-      data,
-      token
-    );
-
-  if (method === 'DELETE')
-    return requestWithRetry(
-      url,
-      'DELETE',
-      `/api/pipeline/${id}`,
-      null,
-      token
-    );
+  if (m === 'GET') return requestWithRetry(url, 'GET', '/api/pipeline', null, effectiveToken);
+  if (m === 'POST') return requestWithRetry(url, 'POST', '/api/pipeline', data, effectiveToken);
+  if (m === 'PUT') return requestWithRetry(url, 'PUT', `/api/pipeline/${encodeURIComponent(id)}`, data, effectiveToken);
+  if (m === 'DELETE') return requestWithRetry(url, 'DELETE', `/api/pipeline/${encodeURIComponent(id)}`, null, effectiveToken);
 });
 
 /* ─────────────────────────────────────────────
@@ -448,17 +446,16 @@ ipcMain.handle('assignments', (_, method, token, id, data) => {
   const url = getServerUrl();
   console.log(`🗂️ Assignments [${method}] with server: ${url}`);
 
-  if (method === 'GET')
-    return requestWithRetry(url, 'GET', '/api/assignments', null, token);
+  const allowed = ['GET', 'POST', 'PUT', 'DELETE'];
+  const m = (String(method || '').toUpperCase());
+  if (!allowed.includes(m)) return Promise.reject(new Error('Invalid assignments method'));
 
-  if (method === 'POST')
-    return requestWithRetry(url, 'POST', '/api/assignments', data, token);
+  const effectiveToken = token || getStoredToken();
 
-  if (method === 'PUT')
-    return requestWithRetry(url, 'PUT', `/api/assignments/${id}`, data, token);
-
-  if (method === 'DELETE')
-    return requestWithRetry(url, 'DELETE', `/api/assignments/${id}`, null, token);
+  if (m === 'GET') return requestWithRetry(url, 'GET', '/api/assignments', null, effectiveToken);
+  if (m === 'POST') return requestWithRetry(url, 'POST', '/api/assignments', data, effectiveToken);
+  if (m === 'PUT') return requestWithRetry(url, 'PUT', `/api/assignments/${encodeURIComponent(id)}`, data, effectiveToken);
+  if (m === 'DELETE') return requestWithRetry(url, 'DELETE', `/api/assignments/${encodeURIComponent(id)}`, null, effectiveToken);
 });
 
 /* ─────────────────────────────────────────────

@@ -29,10 +29,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   loadSavedSearches: (t) => ipcRenderer.invoke('load-saved-searches', t),
   deleteSavedSearch: (t, id) => ipcRenderer.invoke('delete-saved-search', t, id),
   
-  // Pipeline
-  pipeline:          (method, token, id, data) => ipcRenderer.invoke('pipeline', method, token, id, data),
-  // Assignments (GET, POST, PUT)
-  assignments:        (method, token, id, data) => ipcRenderer.invoke('assignments', method, token, id, data),
+  // Pipeline (token optional — main will use stored token if omitted)
+  pipeline:          (method, id, data) => ipcRenderer.invoke('pipeline', method, null, id, data),
+  // Assignments (GET, POST, PUT) — token optional
+  assignments:        (method, id, data) => ipcRenderer.invoke('assignments', method, null, id, data),
   
   // External
   openExternal:      (u) => ipcRenderer.invoke('open-external', u),

@@ -1423,12 +1423,28 @@ app.post('/api/team/activate', async (req, res) => {
       updated_at:  new Date().toISOString()
     });
 
-    // 5. Retourner le firebaseUid au client
-    //    (le client met à jour team_accesses lui-même via member-access.js)
+    // 5. Mettre à jour team_accesses en mode privilégié (Admin SDK)
+    try {
+      await accessRef.update({
+        status: 'active',
+        activated: true,
+        firebaseUid: userRecord.uid,
+        email: email,
+        activatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        activatedBy: accessData.createdBy || managerUid || null
+      });
+    } catch (updateErr) {
+      console.error('[POST /api/team/activate] Failed to update team_accesses, rolling back auth user', updateErr);
+      // Rollback: supprimer l'utilisateur Auth créé pour éviter orphelins
+      try { await admin.auth().deleteUser(userRecord.uid); } catch (dErr) { console.error('Failed to delete user after failed update', dErr); }
+      return res.status(500).json({ error: 'Impossible de finaliser l\'activation (erreur écriture Firestore).' });
+    }
+
+    // 6. Retourner le firebaseUid au client
     return res.status(200).json({
       success:     true,
       firebaseUid: userRecord.uid,
-      message:     'Compte créé avec succès.'
+      message:     'Compte créé et accès activé avec succès.'
     });
 
   } catch (error) {
